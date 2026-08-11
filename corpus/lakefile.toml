@@ -1,0 +1,5 @@
+name = "autoprover-corpus"
+defaultTargets = ["AutoproverCorpus"]
+
+[[lean_lib]]
+name = "AutoproverCorpus"
