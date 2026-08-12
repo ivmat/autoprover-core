@@ -6,10 +6,13 @@ implementation of that pipeline.
 
 ## Contents
 
-- `corpus/` — 62 Lean modules formalizing classical results, bounded
+- `corpus/` — 65 Lean modules formalizing classical results, bounded
   variants, and counterexamples across seven areas (distributed systems,
   order theory, concurrency, process calculi, security, probability,
   reliability). Pure Lean core, no dependencies.
+  [CATALOG.md](corpus/CATALOG.md) indexes every module — what it proves,
+  its attribution, and an honest scope flag (full vs. deliberately
+  restricted).
   Build: `cd corpus && lake build`.
 - `docs/` — the architecture of an automated proving system
   ([ARCHITECTURE.md](docs/ARCHITECTURE.md)), the interface discipline it
