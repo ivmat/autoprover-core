@@ -1,4 +1,5 @@
 import AutoproverCorpus.Concurrency.ConflictSerializability
+import AutoproverCorpus.Concurrency.DekkerMutex
 import AutoproverCorpus.Concurrency.PetersonMutex
 import AutoproverCorpus.Concurrency.ResourceOrderingAcyclic
 import AutoproverCorpus.Concurrency.SubscheduleSerializability
@@ -47,6 +48,7 @@ import AutoproverCorpus.Processes.SimulationTraceInclusion
 import AutoproverCorpus.Processes.TracePreorderCongruence
 import AutoproverCorpus.Processes.TestingPreorder
 import AutoproverCorpus.Reliability.BirnbaumCriticality
+import AutoproverCorpus.Reliability.CoherentSystemBounds
 import AutoproverCorpus.Reliability.KOutOfN
 import AutoproverCorpus.Reliability.PivotalDecomposition
 import AutoproverCorpus.Reliability.TripleModularRedundancy
@@ -54,6 +56,7 @@ import AutoproverCorpus.Reliability.VonNeumannFaultyOrgan
 import AutoproverCorpus.Reliability.VonNeumannFaultyOrgan2
 import AutoproverCorpus.Security.BellLaPadula
 import AutoproverCorpus.Security.BibaIntegrity
+import AutoproverCorpus.Security.ChineseWall
 import AutoproverCorpus.Security.HashChainIntegrity
 import AutoproverCorpus.Security.MerkleInclusion
 import AutoproverCorpus.Security.MultiDomainNoninterference
