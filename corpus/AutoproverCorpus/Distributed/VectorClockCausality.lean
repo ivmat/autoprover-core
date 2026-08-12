@@ -118,7 +118,7 @@ theorem HB_imp_reach {a b : Event} (h : HB a b) : reach a b = true :=
 /-- `reach a b = true → HB a b`: the converse containment, proved by exhibiting an explicit
     `TC`-derivation (chain of `edge_imp_HB`/`TC.trans`) for each of the 10 true pairs, and
     deriving `False` from `h` for every other (false) pair. Full case enumeration — no
-    cleverness, matches this repo's demonstrated-safe style for finite tables. -/
+    cleverness, a plain finite-table style. -/
 theorem reach_imp_HB : ∀ a b, reach a b = true → HB a b
   | .a0, .a0, h => absurd h (by decide)
   | .a0, .a1, _ => edge_imp_HB e_a0a1

@@ -227,4 +227,23 @@ back to the queue on failure rather than being re-run for a tie-break.
 No component ever has to trust another component's *prose* about what it
 did, but not every non-prose verdict carries the same kind of guarantee.
 `docs/INTERFACES.md` develops the same doctrine for what a verification
-tool owes its callers, using a concrete public example.
+tool owes its callers, using the public SARIF result format as its
+worked example.
+
+## A reference implementation
+
+The sections above are a pattern, not pseudocode. A runnable,
+dependency-free reference implementation of that pattern lives in
+`reference/`: the versioned receipt and audit schemas (§7, and the five
+properties of `docs/INTERFACES.md`), the closed-state work queue whose
+state is folded from an append-only evidence log rather than asserted
+(§2), a pluggable kernel gate that treats a checker's exit status as the
+only verdict (§4), the two structural audit checks for vacuity and
+name/content correspondence (§5), and the monotone ratchet with an
+explicit, logged removal path (§6). It is deliberately a skeleton — the
+prover of §3 is an injected command, and the audit checks are honestly
+labelled heuristics, not sound procedures — so that the *interfaces*, not
+any one component, are what the code makes concrete. A worked example
+drives one genuine and one vacuously-true theorem through the whole
+pipeline and shows the kernel accepting both while the audit layer
+rejects the vacuous one.

@@ -19,8 +19,8 @@ variable {Actor TxId : Type}
 /-! ### The model: an approval log with transaction identity -/
 
 /-- Actor `a` approved transaction `t` — membership in the approval log. `abbrev` (not
-    `def`) so `decide` can unfold it in the concrete examples below (per this repo's
-    toolchain notes: `decide` needs its predicates reducible). -/
+    `def`) so `decide` can unfold it in the concrete examples below (`decide` needs its
+    predicates reducible). -/
 abbrev ApprovedOn (log : List (Actor × TxId)) (a : Actor) (t : TxId) : Prop :=
   (a, t) ∈ log
 
