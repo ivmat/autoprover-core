@@ -6,6 +6,16 @@
 
   Attribution: Classical (Birnbaum; Barlow and Proschan).
 
+  TERMINOLOGY (stated at the root, since the name is a claim): the `Coherent` predicate
+  defined below means monotone AND non-degenerate only. Much of the modern reliability
+  literature reserves "coherent" for the STRONGER notion that additionally requires every
+  component to be RELEVANT (pivotal in at least one state), and calls the
+  monotone+non-degenerate class "semicoherent". Every theorem here and in the dependent
+  modules (`CoherentSystemBounds`, `BirnbaumCriticality`) uses only monotonicity and
+  non-degeneracy — never a relevance hypothesis — so each result holds for the broader
+  semicoherent class, hence a fortiori for every classical (relevance-requiring) coherent
+  system. The name `Coherent` is kept for its classical familiarity.
+
   Machine-checked in Lean 4 (core language, no external libraries).
   The claim made is exactly the theorem statements below, as accepted
   by the Lean kernel; hypotheses named in the statements are assumed,
@@ -66,9 +76,19 @@ theorem all_true_eq {n : Nat} (phi : (Fin n → Bool) → Bool) (hmono : Monoton
   have h2 := hmono (fun _ => true) x (fun i _ => hx i)
   cases hxx : phi x <;> cases hyy : phi (fun (_ : Fin n) => true) <;> simp_all
 
-/-- A coherent system: monotone, plus the two nontriviality normalizations — all-down stays
-    down and all-up stays up. (Barlow–Proschan's usual strengthening of "monotone
-    structure function" to a genuine, non-degenerate reliability system.) -/
+/-- A coherent system in the monotone + non-degenerate sense: monotone, plus the two
+    nontriviality normalizations — all-down stays down and all-up stays up.
+
+    TERMINOLOGY (the name is a claim, so state it precisely): this captures monotone +
+    non-degenerate only. Much of the modern reliability literature reserves "coherent" for
+    the STRONGER notion that additionally requires every component to be RELEVANT (pivotal
+    in at least one state — i.e. critical somewhere, in the sense of `IsCritical` in
+    `BirnbaumCriticality`), and calls this monotone + non-degenerate class "semicoherent";
+    Barlow–Proschan's coherent systems are relevance-requiring. Every theorem below uses
+    only monotonicity and non-degeneracy, never a relevance hypothesis, so each result
+    holds for the broader semicoherent class and hence a fortiori for every classical
+    coherent system. The name `Coherent` is kept for its classical familiarity; read it as
+    the monotone + non-degenerate predicate defined here. -/
 structure Coherent {n : Nat} (phi : (Fin n → Bool) → Bool) : Prop where
   mono      : Monotone phi
   allFalse  : phi (fun _ => false) = false

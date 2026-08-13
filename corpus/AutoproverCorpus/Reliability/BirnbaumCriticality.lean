@@ -6,6 +6,15 @@
 
   Attribution: Classical (Birnbaum, 1969).
 
+  TERMINOLOGY note (relevance vs. the `Coherent` predicate): the criticality notion here is
+  exactly the "relevance" condition that distinguishes the two standard classes of structure
+  function. A component is RELEVANT iff it is critical/pivotal in at least one state, i.e.
+  `∃ x, IsCritical phi x i`. The `Coherent` predicate imported from `PivotalDecomposition`
+  requires only monotonicity + non-degeneracy (what much of the modern literature calls
+  "semicoherent"); the STRONGER classical (Barlow–Proschan) "coherent" additionally requires
+  every component to be relevant in this sense. The results in this module assume only
+  monotonicity, so they hold for both classes.
+
   Machine-checked in Lean 4 (core language, no external libraries).
   The claim made is exactly the theorem statements below, as accepted
   by the Lean kernel; hypotheses named in the statements are assumed,
