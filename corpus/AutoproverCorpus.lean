@@ -64,5 +64,7 @@ import AutoproverCorpus.Security.HashChainIntegrity
 import AutoproverCorpus.Security.MerkleInclusion
 import AutoproverCorpus.Security.MultiDomainNoninterference
 import AutoproverCorpus.Security.Noninterference
+import AutoproverCorpus.Security.OneTimePadPerfectSecrecy
 import AutoproverCorpus.Security.SeparationOfDuty
 import AutoproverCorpus.Security.SeparationOfDutyTxId
+import AutoproverCorpus.Security.ShamirThresholdGF5

@@ -1,6 +1,6 @@
 # Corpus Catalog
 
-This is the navigational index for the AutoproverCorpus: 68 Lean 4 modules of
+This is the navigational index for the AutoproverCorpus: 70 Lean 4 modules of
 machine-checked classical results, organized into 7 subject areas. Every module is
 kernel-checked core Lean with **no mathlib and no external libraries** — each proof
 stands on its own. The corpus claims **no novelty**: every result is a formalization of
@@ -130,11 +130,13 @@ Reliability: 7 modules.
 | MerkleInclusion | Merkle inclusion-proof soundness under an injective hash plus leaf/node domain separation (injectivity alone is shown insufficient). | Classical (Merkle, 1979). | scoped — hash injectivity and domain separation are assumed hypotheses, not proved; no cryptographic collision-resistance claim is made |
 | MultiDomainNoninterference | Per-observer unwinding conditions imply per-observer noninterference, over an arbitrary set of security domains. | Classical (Goguen and Meseguer, 1982; unwinding in the style of Rushby, 1992). | full |
 | Noninterference | The purge lemma and unwinding theorem for Goguen-Meseguer noninterference on a deterministic machine. | Classical (Goguen and Meseguer, 1982). | full |
+| OneTimePadPerfectSecrecy | Exactly one one-time-pad key carries any message to any ciphertext of the same length (so a ciphertext excludes no message); key reuse leaks the XOR of the plaintexts. | G. S. Vernam, 1926 (cipher); C. E. Shannon, 1949 (perfect secrecy). | scoped — perfect secrecy in exact key-count form; uniform key assumed, no probability measure formalized, no computational claim |
 | SeparationOfDuty | If two roles conflict and no actor holds both, no single actor can complete a dual-control action. | Classical (Clark and Wilson, 1987). | full |
 | SeparationOfDutyTxId | The two approvals of a dual-control action on the same transaction must come from two distinct actors. | Classical (Clark and Wilson, 1987); transaction-identified form. | full |
+| ShamirThresholdGF5 | Two shares of a degree-1 Shamir polynomial over GF(5) determine the secret; one share leaves every secret possible in exactly one way. | A. Shamir, "How to Share a Secret", 1979 (Blakley, 1979, independently). | scoped — fixed field GF(5) and threshold t = 2, checked by exhaustive enumeration; privacy in exact-count form, no general (t, n) or general-field claim |
 
-Security: 9 modules.
+Security: 11 modules.
 
 ## Total
 
-7 areas, 68 modules (Concurrency 6, Distributed 18, Order 8, Probability 13, Processes 7, Reliability 7, Security 9); 47 flagged `full`, 21 flagged `scoped`.
+7 areas, 70 modules (Concurrency 6, Distributed 18, Order 8, Probability 13, Processes 7, Reliability 7, Security 11); 47 flagged `full`, 23 flagged `scoped`.
