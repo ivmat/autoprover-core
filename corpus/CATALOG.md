@@ -1,6 +1,6 @@
 # Corpus Catalog
 
-This is the navigational index for the AutoproverCorpus: 72 Lean 4 modules of
+This is the navigational index for the AutoproverCorpus: 74 Lean 4 modules of
 machine-checked classical results, organized into 7 subject areas. Every module is
 kernel-checked core Lean with **no mathlib and no external libraries** — each proof
 stands on its own. The corpus claims **no novelty**: every result is a formalization of
@@ -103,9 +103,10 @@ Probability: 13 modules.
 | HennessyMilner | Bisimilar states satisfy exactly the same Hennessy-Milner logic formulas. | M. Hennessy and R. Milner, "Algebraic Laws for Nondeterminism and Concurrency", 1985 (the logical characterization of bisimulation traces to their earlier 1980 work). | scoped — the easy direction only (bisimilar implies same formulas); the converse, which additionally needs image-finiteness, is not proved |
 | SimulationTraceInclusion | Simulation implies finite-trace inclusion: a simulating implementation exhibits no trace absent from its abstract model. | Classical (Milner). | full |
 | TestingPreorder | The De Nicola-Hennessy testing preorder is reflexive and transitive. | Classical (De Nicola and Hennessy, 1984). | full |
+| TraceEquivalenceNotBisimulation | Milner's `a.(b+c)` and `a.b+a.c` have identical trace sets (both computed exactly) yet no bisimulation relates them. | Classical (R. Milner, 1980/1989; bisimulation: Park, 1981; Hennessy and Milner, 1980). | full |
 | TracePreorderCongruence | The trace-inclusion preorder is preserved by prefix, choice and parallel contexts. | Trace-inclusion congruence for a De Nicola-Hennessy-style process calculus (De Nicola and Hennessy, 1984); scoped here to pure-interleaving trace inclusion. | scoped — pure interleaving (no synchronization); trace-inclusion, weaker than standard may-testing equivalence |
 
-Processes: 7 modules.
+Processes: 8 modules.
 
 ## Reliability
 
@@ -115,11 +116,12 @@ Processes: 7 modules.
 | CoherentSystemBounds | For a coherent (monotone, non-degenerate) structure function phi over n components, series(x) ≤ phi(x) ≤ parallel(x) at every state x. | Classical reliability theory (Barlow and Proschan, 1975). | full |
 | KOutOfN | The k-out-of-n structure function is monotone; series and parallel are its two extreme special cases. | Classical reliability theory (Birnbaum, 1969; Barlow and Proschan, 1975). | full |
 | PivotalDecomposition | Pivotal (Shannon) decomposition of monotone Boolean structure functions, with series and parallel bounds. | Classical (Birnbaum; Barlow and Proschan). | full |
+| StructureFunctionDuality | The dual structure function is involutive, preserves coherence, swaps series and parallel, and carries minimal cut vectors to minimal path vectors. | Classical reliability theory (Barlow and Proschan, 1975). | full |
 | TripleModularRedundancy | Perfect-voter TMR of three independent e-failing components fails with probability 3e^2 - 2e^3, improving on e for 0 < e < 1/2. | Classical reliability analysis (TMR with a perfect voter; cf. von Neumann, 1956, for the faulty-organ theorem, which this file does NOT prove). | scoped — perfect-voter analysis only; the faulty-organ (von Neumann) case is proved separately |
 | VonNeumannFaultyOrgan | Von Neumann multiplexing error analysis when the restoring organ itself is built from unreliable components. | Classical (von Neumann, 1956); scoped finite form. | scoped — an explicit error function with an organ-failure parameter; the full symbolic threshold is not claimed |
 | VonNeumannFaultyOrgan2 | Error after a second restoring stage (a nine-gate organ) of the faulty-organ multiplexing analysis. | Classical (von Neumann, 1956); two-stage finite form. | scoped — one extra (two-stage) recursion level; not a general n-level recursive result |
 
-Reliability: 7 modules.
+Reliability: 8 modules.
 
 ## Security
 
@@ -141,4 +143,4 @@ Security: 11 modules.
 
 ## Total
 
-7 areas, 72 modules (Concurrency 8, Distributed 18, Order 8, Probability 13, Processes 7, Reliability 7, Security 11); 47 flagged `full`, 25 flagged `scoped`.
+7 areas, 74 modules (Concurrency 8, Distributed 18, Order 8, Probability 13, Processes 8, Reliability 8, Security 11); 49 flagged `full`, 25 flagged `scoped`.
