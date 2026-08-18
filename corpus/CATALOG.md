@@ -1,6 +1,6 @@
 # Corpus Catalog
 
-This is the navigational index for the AutoproverCorpus: 66 Lean 4 modules of
+This is the navigational index for the AutoproverCorpus: 68 Lean 4 modules of
 machine-checked classical results, organized into 7 subject areas. Every module is
 kernel-checked core Lean with **no mathlib and no external libraries** — each proof
 stands on its own. The corpus claims **no novelty**: every result is a formalization of
@@ -86,8 +86,10 @@ Order: 8 modules.
 | FrechetUpperBound | An intersection of events is contained in each of them, so joint probability never exceeds any marginal. | Classical (Frechet, 1935). | full |
 | KroghVedelsby | Ensemble error equals average member error minus average ambiguity (finite rational sum identity). | Classical (Krogh and Vedelsby, 1995). | full |
 | MarkovInequality | Discrete/counting form of Markov's inequality for a Nat-valued function on a finite index list. | Markov's inequality (A. A. Markov). | full |
+| PairwiseNotMutualIndependence | Bernstein's three events are pairwise independent but not mutually independent, with three genuinely mutually independent events as a positive control. | Classical (S. N. Bernstein, Theory of Probability, 1946). | full |
+| SimpsonsParadox | Stratum-wise dominance can reverse under pooling (kidney-stone table); it cannot when the two groups share the same allocation ratio. | E. H. Simpson, 1951 (earlier: Yule, 1903; Pearson, 1899); instance from Charig et al., 1986. | full |
 
-Probability: 11 modules.
+Probability: 13 modules.
 
 ## Processes
 
@@ -135,4 +137,4 @@ Security: 9 modules.
 
 ## Total
 
-7 areas, 66 modules (Concurrency 6, Distributed 18, Order 8, Probability 11, Processes 7, Reliability 7, Security 9); 45 flagged `full`, 21 flagged `scoped`.
+7 areas, 68 modules (Concurrency 6, Distributed 18, Order 8, Probability 13, Processes 7, Reliability 7, Security 9); 47 flagged `full`, 21 flagged `scoped`.

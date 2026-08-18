@@ -41,6 +41,8 @@ import AutoproverCorpus.Probability.FrechetDiscreteMeasure
 import AutoproverCorpus.Probability.FrechetUpperBound
 import AutoproverCorpus.Probability.KroghVedelsby
 import AutoproverCorpus.Probability.MarkovInequality
+import AutoproverCorpus.Probability.PairwiseNotMutualIndependence
+import AutoproverCorpus.Probability.SimpsonsParadox
 import AutoproverCorpus.Processes.Bisimulation
 import AutoproverCorpus.Processes.Diagnosability
 import AutoproverCorpus.Processes.DiagnosabilityUnbounded
