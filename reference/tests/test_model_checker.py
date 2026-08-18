@@ -21,13 +21,14 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from autoprover_ref.audit import TargetProvenance
+from autoprover_ref.audit import TargetProvenance, run_audit
 from autoprover_ref.kernel_gate import KernelGate
 from autoprover_ref.model_checker import (
     ModelObligation,
     TransitionSystem,
     check_obligations,
     explore,
+    hypothesis_coverage,
     model_checker_command,
 )
 from autoprover_ref.pipeline import Pipeline
@@ -86,6 +87,18 @@ COUNTER_OBLIGATIONS = [
         description="counts above 500 (never reached under a tiny bound) stay in range",
     ),
 ]
+
+
+# An obligation whose guard the correct traffic light never prunes: every
+# state it can reach satisfies "not stuck". The same obligation IS
+# exercised against the buggy variant, which can reach `stuck` - the
+# contrast the unexercised-hypothesis check is built to make visible.
+NOT_STUCK_OBLIGATION = ModelObligation(
+    id="not_stuck_implies_cycling",
+    precondition=lambda s: s != "stuck",
+    property=lambda s: s in ("red", "green", "yellow"),
+    description="a light that is not stuck is in one of the three cycle states",
+)
 
 
 class ExplorationTests(unittest.TestCase):
@@ -335,3 +348,84 @@ class PipelineRatchetBoundaryTests(TempDirCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HypothesisCoverageTests(unittest.TestCase):
+    """`hypothesis_coverage` counts how the explored states split across
+    each obligation's precondition - the input the audit layer's
+    unexercised-hypothesis check judges (it counts; it does not judge)."""
+
+    def test_counts_satisfying_and_violating_states(self):
+        exploration = explore(traffic_light_system(buggy=True), bound=10)
+        [record] = hypothesis_coverage(exploration, [NOT_STUCK_OBLIGATION])
+        self.assertEqual(record.obligation_id, "not_stuck_implies_cycling")
+        self.assertTrue(record.has_precondition)
+        self.assertEqual(record.states_satisfying, 3)   # red, green, yellow
+        self.assertEqual(record.states_violating, 1)    # stuck
+        self.assertTrue(record.exhaustive)
+
+    def test_guard_that_prunes_nothing_reports_zero_violating(self):
+        exploration = explore(traffic_light_system(), bound=10)
+        [record] = hypothesis_coverage(exploration, [NOT_STUCK_OBLIGATION])
+        self.assertEqual(record.states_satisfying, 3)
+        self.assertEqual(record.states_violating, 0)
+
+    def test_unconditional_obligation_is_marked_not_counted(self):
+        exploration = explore(traffic_light_system(), bound=10)
+        records = {r.obligation_id: r for r in
+                   hypothesis_coverage(exploration, TRAFFIC_LIGHT_OBLIGATIONS)}
+        unconditional = records["light_never_stuck"]
+        self.assertFalse(unconditional.has_precondition)
+        self.assertEqual((unconditional.states_satisfying, unconditional.states_violating), (0, 0))
+
+    def test_never_firing_precondition_reports_zero_satisfying(self):
+        exploration = explore(traffic_light_system(), bound=10)
+        records = {r.obligation_id: r for r in
+                   hypothesis_coverage(exploration, TRAFFIC_LIGHT_OBLIGATIONS)}
+        maintenance = records["maintenance_mode_is_safe"]
+        self.assertTrue(maintenance.has_precondition)
+        self.assertEqual(maintenance.states_satisfying, 0)
+        self.assertEqual(maintenance.states_violating, 3)
+
+    def test_bound_truncated_exploration_is_marked_not_exhaustive(self):
+        exploration = explore(counter_system(), bound=5)
+        [record] = hypothesis_coverage(exploration, COUNTER_OBLIGATIONS)
+        self.assertFalse(record.exhaustive)
+        self.assertEqual(record.states_satisfying, 0)   # nothing reached 500
+        self.assertEqual(record.states_violating, 5)
+
+
+class CoverageFeedsTheAuditLayerTests(unittest.TestCase):
+    """End to end over the §4 -> §5 seam: explore, count, audit. The same
+    obligation is flagged against the system whose states never violate
+    its guard and passes against the one whose states do."""
+
+    @staticmethod
+    def audit_for(system: TransitionSystem):
+        exploration = explore(system, bound=10)
+        coverage = hypothesis_coverage(exploration, [NOT_STUCK_OBLIGATION])
+        provenance = TargetProvenance(
+            source="model-checked target",
+            statement_text="forall (s : State), s != stuck -> Cycling s",
+            claim_keywords=(),
+            preconditions=("s != stuck",),
+            non_vacuity_witness="bounded exploration: 3 states satisfy the precondition",
+            obligation_evidence=tuple(coverage),
+        )
+        return run_audit("not_stuck_implies_cycling", "cand1", provenance)
+
+    def test_correct_system_never_prunes_the_guard_and_is_flagged(self):
+        verdict = self.audit_for(traffic_light_system())
+        self.assertEqual(verdict.verdict, "fail")
+        self.assertEqual(verdict.failure_reason, "unexercised-hypothesis")
+
+    def test_buggy_system_exercises_the_guard_and_passes(self):
+        # The buggy variant reaches `stuck`, so the precondition prunes a
+        # state and the implication is genuinely exercised. (The
+        # obligation still holds - being exercised is not the same as
+        # failing.)
+        verdict = self.audit_for(traffic_light_system(buggy=True))
+        self.assertEqual(verdict.verdict, "pass")
+        [status] = [r for r in check_obligations(
+            explore(traffic_light_system(buggy=True), bound=10), [NOT_STUCK_OBLIGATION])]
+        self.assertEqual(status.status, "held")

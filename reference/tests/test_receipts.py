@@ -11,6 +11,7 @@ from pathlib import Path
 
 from autoprover_ref.jsonschema_min import SchemaValidationError
 from autoprover_ref.receipts import (
+    AUDIT_SCHEMA_VERSION,
     Certificate,
     Checker,
     Obligation,
@@ -99,6 +100,19 @@ class ReceiptRoundTripTests(TempDirCase):
         loaded = load_audit(path)
         self.assertEqual(loaded, verdict)
 
+    def test_audit_verdict_round_trip_unexercised_hypothesis(self):
+        verdict = AuditVerdict(
+            target_id="t1", candidate_id="c1", verdict="fail",
+            failure_reason="unexercised-hypothesis",
+            details={"unexercised": [{"obligation_id": "o1"}]},
+            produced_at=now_iso(),
+        )
+        path = self.tmp_path("audit.json")
+        write_audit(path, verdict)
+        loaded = load_audit(path)
+        self.assertEqual(loaded, verdict)
+        self.assertEqual(loaded.schema_version, "1.1.0")
+
 
 class MalformedDocumentTests(unittest.TestCase):
     def test_kernel_receipt_construction_rejects_harness(self):
@@ -168,7 +182,7 @@ class MalformedDocumentTests(unittest.TestCase):
 
     def test_audit_schema_rejects_null_failure_reason_on_fail(self):
         doc = {
-            "schema_version": "1.0.0", "target_id": "t", "candidate_id": "c",
+            "schema_version": AUDIT_SCHEMA_VERSION, "target_id": "t", "candidate_id": "c",
             "verdict": "fail", "failure_reason": None, "details": {}, "produced_at": now_iso(),
         }
         with self.assertRaises(SchemaValidationError):
@@ -176,12 +190,40 @@ class MalformedDocumentTests(unittest.TestCase):
 
     def test_audit_schema_rejects_non_null_failure_reason_on_pass(self):
         doc = {
-            "schema_version": "1.0.0", "target_id": "t", "candidate_id": "c",
+            "schema_version": AUDIT_SCHEMA_VERSION, "target_id": "t", "candidate_id": "c",
             "verdict": "pass", "failure_reason": "vacuous-precondition", "details": {},
             "produced_at": now_iso(),
         }
         with self.assertRaises(SchemaValidationError):
             validate_audit_dict(doc)
+
+    def test_audit_schema_accepts_the_1_1_0_failure_reason(self):
+        doc = {
+            "schema_version": "1.1.0", "target_id": "t", "candidate_id": "c",
+            "verdict": "fail", "failure_reason": "unexercised-hypothesis",
+            "details": {"check": "unexercised_hypothesis"}, "produced_at": now_iso(),
+        }
+        validate_audit_dict(doc)  # must not raise
+
+    def test_audit_schema_forbids_the_1_1_0_reason_in_a_1_0_0_document(self):
+        # Adding a value to a closed enum travels with a version bump
+        # (INTERFACES.md property 5): a document that declares the older
+        # format may not carry a code that format never defined.
+        doc = {
+            "schema_version": "1.0.0", "target_id": "t", "candidate_id": "c",
+            "verdict": "fail", "failure_reason": "unexercised-hypothesis",
+            "details": {}, "produced_at": now_iso(),
+        }
+        with self.assertRaises(SchemaValidationError):
+            validate_audit_dict(doc)
+
+    def test_audit_schema_still_accepts_a_1_0_0_document(self):
+        doc = {
+            "schema_version": "1.0.0", "target_id": "t", "candidate_id": "c",
+            "verdict": "fail", "failure_reason": "vacuous-precondition",
+            "details": {}, "produced_at": now_iso(),
+        }
+        validate_audit_dict(doc)  # must not raise
 
     def test_load_receipt_raises_on_disk_corruption_not_silent_coerce(self):
         with TempDirCase.temp_dir() as d:

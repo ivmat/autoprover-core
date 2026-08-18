@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Worked example: `autoprover_ref.model_checker` driving a tiny bounded
-model checker through three toy scenarios, chosen to visibly demonstrate
-all four obligation statuses `receipt.schema.json` makes first-class
+model checker through four toy scenarios. The first three demonstrate all
+four obligation statuses `receipt.schema.json` makes first-class
 (INTERFACES.md property 2): `held`, `vacuous`, `not-exercised`, `failed`.
+The fourth demonstrates the finding those statuses cannot express — a
+precondition no explored state violated.
 
   - Scenario 1: a 3-state traffic light (`red -> green -> yellow -> red`).
     Bounded exploration reaches a fixed point (the whole reachable set is
@@ -37,6 +39,18 @@ all four obligation statuses `receipt.schema.json` makes first-class
     `Pipeline` wiring as scenario 1, this shows the failing receipt is
     correctly kept out of the ratchet.
 
+  - Scenario 4: the same two traffic lights, checked against an
+    obligation whose guard is "the light is not stuck". Against the
+    correct light, every explored state satisfies that guard — it prunes
+    nothing, the implication is never exercised as an implication, and
+    `audit.check_unexercised_hypothesis` flags it
+    (`failure_reason="unexercised-hypothesis"`). Against the buggy light,
+    which can reach `stuck`, the same guard prunes a state and the audit
+    passes. Note what this is not: the obligation `held` in both runs.
+    A `held` status cannot distinguish "checked on both sides of the
+    guard" from "the guard did no work", which is exactly why this is a
+    separate audit-layer finding rather than a fifth status.
+
 See `autoprover_ref/model_checker.py` for the module this drives and
 `reference/README.md` for how this fits the rest of the pipeline.
 """
@@ -50,13 +64,14 @@ EXAMPLES_DIR = Path(__file__).resolve().parent
 REFERENCE_DIR = EXAMPLES_DIR.parent
 sys.path.insert(0, str(REFERENCE_DIR))
 
-from autoprover_ref.audit import TargetProvenance  # noqa: E402
+from autoprover_ref.audit import TargetProvenance, run_audit  # noqa: E402
 from autoprover_ref.kernel_gate import KernelGate  # noqa: E402
 from autoprover_ref.model_checker import (  # noqa: E402
     ModelObligation,
     TransitionSystem,
     check_obligations,
     explore,
+    hypothesis_coverage,
     model_checker_command,
 )
 from autoprover_ref.pipeline import Pipeline  # noqa: E402
@@ -96,6 +111,17 @@ TRAFFIC_LIGHT_OBLIGATIONS = [
         description="if the light ever enters maintenance mode, it stays safe there",
     ),
 ]
+
+
+# An obligation whose guard the correct light never prunes, and the buggy
+# one does — the contrast scenario 4 turns into two different audit
+# verdicts on an obligation that `held` either way.
+NOT_STUCK_OBLIGATION = ModelObligation(
+    id="not_stuck_implies_cycling",
+    precondition=lambda s: s != "stuck",
+    property=lambda s: s in ("red", "green", "yellow"),
+    description="a light that is not stuck is in one of the three cycle states",
+)
 
 
 def counter_system(cap: int = 1000) -> TransitionSystem:
@@ -233,18 +259,51 @@ def scenario_3_buggy_traffic_light() -> dict:
     return statuses
 
 
+def scenario_4_unexercised_hypothesis() -> dict:
+    print("\n=== scenario 4: a precondition nothing violated — unexercised-hypothesis ===")
+    verdicts = {}
+    for label, system in (("correct", traffic_light_system()),
+                          ("buggy", traffic_light_system(buggy=True))):
+        exploration = explore(system, bound=10)
+        [status] = check_obligations(exploration, [NOT_STUCK_OBLIGATION])
+        [coverage] = hypothesis_coverage(exploration, [NOT_STUCK_OBLIGATION])
+        provenance = TargetProvenance(
+            source="reference/examples/model_check_example.py:scenario_4",
+            statement_text="a light that is not stuck is in one of the three cycle states",
+            preconditions=("the light is not stuck",),
+            non_vacuity_witness=(
+                f"bounded exploration: {coverage.states_satisfying} state(s) satisfy it"
+            ),
+            obligation_evidence=(coverage,),
+        )
+        verdict = run_audit("not_stuck_implies_cycling", f"scenario4-{label}", provenance)
+        verdicts[label] = verdict.failure_reason
+        print(
+            f"  {label} light: obligation status={status.status!r}, "
+            f"precondition satisfied by {coverage.states_satisfying} state(s), "
+            f"violated by {coverage.states_violating}"
+        )
+        print(f"    audit verdict={verdict.verdict!r} failure_reason={verdict.failure_reason!r}")
+    assert verdicts["correct"] == "unexercised-hypothesis", verdicts
+    assert verdicts["buggy"] is None, verdicts
+    return verdicts
+
+
 def main() -> int:
     all_statuses = {}
     all_statuses.update(scenario_1_traffic_light())
     all_statuses.update({f"counter.{k}": v for k, v in scenario_2_counter().items()})
     all_statuses.update({f"buggy.{k}": v for k, v in scenario_3_buggy_traffic_light().items()})
+    audit_verdicts = scenario_4_unexercised_hypothesis()
 
     observed = set(all_statuses.values())
     expected = {"held", "vacuous", "not-exercised", "failed"}
     print(f"\nObligation statuses observed across all scenarios: {sorted(observed)}")
     ok = expected.issubset(observed)
     print(f"All four obligation statuses demonstrated: {ok}")
-    return 0 if ok else 1
+    flagged = audit_verdicts.get("correct") == "unexercised-hypothesis"
+    print(f"Unexercised hypothesis flagged by the audit layer: {flagged}")
+    return 0 if (ok and flagged) else 1
 
 
 if __name__ == "__main__":

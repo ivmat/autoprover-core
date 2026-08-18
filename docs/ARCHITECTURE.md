@@ -145,6 +145,16 @@ verification work, including public tooling:
   tool also reports whether any input was actually explored. This is
   precisely the gap that motivated exhaustive, vacuity-visible property
   reporting in real model checkers — see `docs/INTERFACES.md`.
+- **Unexercised hypothesis.** The mirror image of vacuous acceptance, and
+  a distinct failure: a precondition that *every* state a bounded checker
+  enumerated satisfies has pruned nothing, so the implication was never
+  exercised as an implication. What the run established is the
+  unconditional property over the states it saw; the stated hypothesis was
+  never put to work, and a guard that is accidentally always true — a
+  typo, a tautology, a fixture too narrow to generate a violating state —
+  is indistinguishable from a load-bearing one at the verdict level.
+  Vacuity asks whether the hypothesis can ever fire; this asks whether it
+  ever failed to.
 - **Name/content mismatch.** A theorem named `sort_is_correct` might
   formally state only that the output has the same length as the input —
   true, kernel-checked, and a wildly overclaiming name. Nothing in the
@@ -238,8 +248,9 @@ dependency-free reference implementation of that pattern lives in
 properties of `docs/INTERFACES.md`), the closed-state work queue whose
 state is folded from an append-only evidence log rather than asserted
 (§2), a pluggable kernel gate that treats a checker's exit status as the
-only verdict (§4), the two structural audit checks for vacuity and
-name/content correspondence (§5), and the monotone ratchet with an
+only verdict (§4), the structural audit checks for vacuity, unexercised
+hypotheses, name/content correspondence and claimed scope (§5), and the
+monotone ratchet with an
 explicit, logged removal path (§6). It is deliberately a skeleton — the
 prover of §3 is an injected command, and the audit checks are honestly
 labelled heuristics, not sound procedures — so that the *interfaces*, not

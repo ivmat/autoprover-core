@@ -8,6 +8,13 @@ reporting each named obligation's status as exactly one of `held` /
 `vacuous` / `not-exercised` / `failed` — never collapsing "never got a
 chance to check this" into "checked and it passed".
 
+Besides the four-status reduction, this module also reports, per
+obligation, how the explored states split across its PRECONDITION
+(`hypothesis_coverage`) — how many satisfied it and how many violated it.
+That is what lets the audit layer ask a question the status alone cannot
+answer: was the implication ever exercised as an implication, or did the
+guard prune nothing (see `audit.check_unexercised_hypothesis`)?
+
 It is deliberately tiny and dependency-free: states are any hashable
 Python value, transitions are a plain function ``state -> Iterable[state]``,
 and obligations are a precondition predicate plus a property predicate,
@@ -58,6 +65,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Hashable, Iterable, Optional, Sequence
 
+from .audit import ObligationHypothesisEvidence
 from .kernel_gate import CheckerCommand, CheckerResult
 
 __all__ = [
@@ -67,6 +75,7 @@ __all__ = [
     "explore",
     "ObligationCheckResult",
     "check_obligations",
+    "hypothesis_coverage",
     "model_checker_command",
 ]
 
@@ -219,6 +228,59 @@ def check_obligations(
             counterexample=counterexample,
         ))
     return results
+
+
+def hypothesis_coverage(
+    exploration: ExplorationResult, obligations: Sequence[ModelObligation]
+) -> list[ObligationHypothesisEvidence]:
+    """Report, per obligation, how the explored states split across its
+    precondition: how many satisfied it and how many VIOLATED it. This is
+    the input `audit.check_unexercised_hypothesis` judges — an obligation
+    no explored state violated the precondition of is one whose guard
+    pruned nothing, so its implication was never exercised as an
+    implication.
+
+    This function only counts; it makes no judgment, exactly as
+    `check_obligations` above only assigns statuses and makes no judgment
+    about whether a status is acceptable. The `exhaustive` flag is copied
+    onto every record because it is what tells a reader whether "nothing
+    violated it" is a fact about the system's whole reachable set or only
+    about this bounded run.
+
+    Note the deliberate asymmetry with `check_obligations`: an obligation
+    with no precondition is reported here with `has_precondition=False`
+    and both counts zero rather than being treated as "precondition
+    trivially true everywhere". An unconditional obligation is not a
+    conditional one with a tautological guard — it never claimed to be
+    restricted — and flattening the two would manufacture a finding out
+    of an honest unconditional claim.
+    """
+    records: list[ObligationHypothesisEvidence] = []
+    for obligation in obligations:
+        if obligation.precondition is None:
+            records.append(ObligationHypothesisEvidence(
+                obligation_id=obligation.id,
+                has_precondition=False,
+                states_satisfying=0,
+                states_violating=0,
+                exhaustive=exploration.exhaustive,
+            ))
+            continue
+        satisfying = 0
+        violating = 0
+        for state in exploration.visited_order:
+            if obligation.precondition(state):
+                satisfying += 1
+            else:
+                violating += 1
+        records.append(ObligationHypothesisEvidence(
+            obligation_id=obligation.id,
+            has_precondition=True,
+            states_satisfying=satisfying,
+            states_violating=violating,
+            exhaustive=exploration.exhaustive,
+        ))
+    return records
 
 
 def model_checker_command(

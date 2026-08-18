@@ -132,10 +132,13 @@ end to end; the script itself checks this exact pattern and prints
 `model_check_example.py` (run with `python3 model_check_example.py`, same
 directory, no `lean` needed) is a separate worked example: it drives
 `autoprover_ref/model_checker.py`, a small bounded model checker, through
-three toy scenarios chosen to exhibit all four obligation statuses
-(`held`, `vacuous`, `not-exercised`, `failed`) that `receipt.schema.json`
-makes first-class. See `reference/README.md`'s "The model checker"
-section for the walkthrough.
+four toy scenarios: three exhibit all four obligation statuses (`held`,
+`vacuous`, `not-exercised`, `failed`) that `receipt.schema.json` makes
+first-class, and the fourth exhibits the finding no status can express —
+an obligation whose precondition NO explored state violated, `held` in
+both runs, flagged by the audit layer against the system whose states
+never violate the guard and passing against the one whose states do. See
+`reference/README.md`'s "The model checker" section for the walkthrough.
 
 ## Divergence note
 

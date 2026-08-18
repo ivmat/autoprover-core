@@ -9,7 +9,15 @@ Public API re-exports the pieces most callers need; internal modules
 remain individually importable for anything more specific.
 """
 
-from .audit import TargetProvenance, check_name_content, check_scope, check_vacuity, run_audit
+from .audit import (
+    ObligationHypothesisEvidence,
+    TargetProvenance,
+    check_name_content,
+    check_scope,
+    check_unexercised_hypothesis,
+    check_vacuity,
+    run_audit,
+)
 from .kernel_gate import CheckerCommand, CheckerResult, KernelGate, lean_checker_command
 from .model_checker import (
     ExplorationResult,
@@ -18,6 +26,7 @@ from .model_checker import (
     TransitionSystem,
     check_obligations,
     explore,
+    hypothesis_coverage,
     model_checker_command,
 )
 from .pipeline import Pipeline, PipelineResult
@@ -52,9 +61,11 @@ from .receipts import (
 
 __all__ = [
     # audit
+    "ObligationHypothesisEvidence",
     "TargetProvenance",
     "check_name_content",
     "check_scope",
+    "check_unexercised_hypothesis",
     "check_vacuity",
     "run_audit",
     # kernel_gate
@@ -69,6 +80,7 @@ __all__ = [
     "TransitionSystem",
     "check_obligations",
     "explore",
+    "hypothesis_coverage",
     "model_checker_command",
     # pipeline
     "Pipeline",

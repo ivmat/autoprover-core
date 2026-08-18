@@ -37,8 +37,8 @@ executable — see below.
 | `autoprover_ref/receipts.py` | §7 | Receipt/audit-verdict dataclasses, schema validation, atomic writes. |
 | `autoprover_ref/queue.py` | §2 | The evidence-driven target queue state machine. |
 | `autoprover_ref/kernel_gate.py` | §4 | The checker-as-sound-oracle wrapper (pluggable checker command). |
-| `autoprover_ref/audit.py` | §5 | The semantic audit layer: vacuity, name/content, and scope heuristics. |
-| `autoprover_ref/model_checker.py` | §4, §5 | A bounded model checker realizing the exhaustive obligation-level `held`/`vacuous`/`not-exercised`/`failed` bucket, wired in as a `kernel_gate.CheckerCommand`. |
+| `autoprover_ref/audit.py` | §5 | The semantic audit layer: vacuity, unexercised-hypothesis, name/content, and scope heuristics. |
+| `autoprover_ref/model_checker.py` | §4, §5 | A bounded model checker realizing the exhaustive obligation-level `held`/`vacuous`/`not-exercised`/`failed` bucket, wired in as a `kernel_gate.CheckerCommand`; also reports per-obligation precondition coverage for the audit layer. |
 | `autoprover_ref/ratchet.py` | §6 | The monotone accepted set, explicit removal, dependency recheck. |
 | `autoprover_ref/pipeline.py` | §§2–7 | Glue: drives one target through all of the above. |
 | `autoprover_ref/jsonschema_min.py` | — | The hand-rolled JSON Schema validator subset the two schemas use. |
@@ -147,11 +147,29 @@ receipt never carries a certificate and always carries its
 harness/bound/env_assumptions triple — the kernel-vs-model-checker
 distinction from ARCHITECTURE.md §4, enforced in code by `kernel_gate.py`
 and `receipts.Receipt.__post_init__`, not just documented here).
-`model_check_example.py` runs three toy scenarios chosen specifically to
-exhibit all four obligation statuses — a small closed traffic-light
-system for `held` and `vacuous`, a long linear counter explored under a
-small bound for `not-exercised`, and a buggy variant of the traffic light
-for `failed` — and prints which statuses it observed.
+`model_checker.hypothesis_coverage(exploration, obligations)` reports the
+other half of the picture the four statuses cannot express: for each
+obligation, how many explored states SATISFIED its precondition and how
+many VIOLATED it. An obligation no explored state violated the
+precondition of has a guard that pruned nothing — its implication was
+never exercised as an implication, which is what
+`audit.check_unexercised_hypothesis` flags (see "Honesty notes" below).
+The function only counts; the judgment lives in the audit layer, on the
+§4 → §5 seam, exactly as the four statuses are assigned here and judged
+there.
+
+`model_check_example.py` runs four toy scenarios. Three exhibit all four
+obligation statuses — a small closed traffic-light system for `held` and
+`vacuous`, a long linear counter explored under a small bound for
+`not-exercised`, and a buggy variant of the traffic light for `failed`.
+The fourth checks one obligation, whose guard is "the light is not
+stuck", against both traffic lights: it comes back `held` from both runs,
+but the correct light never produces a state violating the guard (so the
+audit layer flags `unexercised-hypothesis`) while the buggy one does (so
+the audit passes). That a single status cannot separate those two cases
+is exactly why this finding lives in the audit layer rather than as a
+fifth status. The script prints which statuses it observed and whether
+the unexercised hypothesis was flagged.
 
 ## Honesty notes (heuristic vs. sound, by design)
 
@@ -160,11 +178,12 @@ for `failed` — and prints which statuses it observed.
   from the prover's own claim. This is enforced by *not giving
   `KernelGate.check` any other input to base a verdict on* — there is
   no code path that reads a "prover says this is correct" flag.
-- `audit.py`'s three checks (vacuity, name/content, and — as of this
-  version — scope) are explicitly documented, in the module docstring and
-  in code comments, as structural heuristics operating on provenance
-  text/metadata — never as sound verification. A target can pass all
-  three checks and still be wrong in a way a human would catch
+- `audit.py`'s four checks (vacuity, unexercised hypothesis,
+  name/content, and scope) are explicitly documented, in the module
+  docstring and in code comments, as structural heuristics operating on
+  provenance text/metadata and reported enumeration counts — never as
+  sound verification. A target can pass all
+  four checks and still be wrong in a way a human would catch
   immediately; that trade-off is the one ARCHITECTURE.md §7 draws
   between a kernel verdict (independently re-derivable) and an audit
   verdict (a judgment). The scope check (`audit.check_scope`) in
@@ -175,6 +194,17 @@ for `failed` — and prints which statuses it observed.
   itself assert generality — exactly the same abstain-rather-than-guess
   discipline `check_name_content` already uses for keywords outside its
   lexicon.
+- `audit.check_unexercised_hypothesis` judges *counts an enumerating
+  checker reported*, not semantics: "no explored state violated this
+  precondition" is a fact about the states one run happened to enumerate,
+  never a proof that the hypothesis is redundant. It abstains on any
+  target that records no enumerated-obligation evidence (a proof-kernel
+  target has no enumerated state space at all), skips unconditional
+  obligations (nothing to exercise), and deliberately does NOT re-report
+  the case where the precondition never fired — that is the
+  vacuous/not-exercised finding the model checker already reports per
+  obligation, and flattening the two would produce one ambiguous verdict
+  where there are two distinct findings.
 - `autoprover_ref/model_checker.py`'s bounded exploration is likewise
   honestly bounded, not sound in the way `kernel_gate.py` is: a `held`
   status means "true on every state this run actually explored", not
@@ -233,6 +263,21 @@ recorded here as implemented rather than as gaps:
   whether the exploration reached a fixed point, and reports both through
   exactly that `obligation_statuses` seam via
   `model_checker.model_checker_command`. See "The model checker" above.
+- **`unexercised-hypothesis`**, the mirror image of the vacuity check,
+  was not implemented in any version of this package before the audit
+  schema's 1.1.0 revision: the model checker could already tell a caller
+  that an obligation's precondition never *fired* (`vacuous` /
+  `not-exercised`), but nothing reported the opposite finding — a
+  precondition that every enumerated state satisfies, so the implication
+  was never exercised and the guard did no work.
+  `model_checker.hypothesis_coverage` now reports the satisfying/violating
+  split per obligation and `audit.check_unexercised_hypothesis` judges it,
+  producing the new `unexercised-hypothesis` failure reason. That reason
+  is a new value in a closed enum, which a consumer must be able to
+  notice, so it travels with an audit-schema version bump (1.0.0 →
+  1.1.0, INTERFACES.md property 5); 1.0.0 documents still validate and
+  are forbidden by the schema from carrying the 1.1.0-only code. The
+  receipt schema is versioned separately and is unchanged at 1.0.0.
 - **`scope-narrower-than-claimed`** was schema-defined but not
   implemented — this reference package originally shipped only the two
   checks the initial task specified (vacuity, name/content) and left this

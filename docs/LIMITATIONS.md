@@ -96,8 +96,9 @@ interesting case is genuinely exercised, not vacuously true.
 
 The pipeline code in `reference/` exists to make the architecture concrete
 and runnable, not to be a production system. Its prover is an injected
-command; its audit checks (vacuity, name/content correspondence, scope)
-are **honestly-labelled heuristics, not sound decision procedures** — they
+command; its audit checks (vacuity, unexercised hypothesis, name/content
+correspondence, scope) are **honestly-labelled heuristics, not sound
+decision procedures** — they
 can miss and, where they cannot tell, they abstain rather than guess; its
 bounded model checker is a small self-contained toy, not an industrial
 tool. What it demonstrates is the *interface discipline* — evidence-driven

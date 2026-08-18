@@ -24,7 +24,8 @@ implementation of that pipeline.
   pipeline the docs describe: versioned receipt and audit schemas, an
   evidence-driven work queue whose state is folded from an append-only
   log, a pluggable kernel gate, structural audit checks (vacuity,
-  name/content correspondence, scope), a small bounded model checker that
+  unexercised hypothesis, name/content correspondence, scope), a small
+  bounded model checker that
   reports each obligation's status (held / vacuous / not-exercised /
   failed), and a monotone ratchet — with a test suite and a worked Lean
   example. It is a skeleton that makes the pattern concrete, not a product.

@@ -1,6 +1,7 @@
 """Tests for audit.py: catches a synthetic vacuously-true target, a
-synthetic overclaiming name, and a synthetic narrowed-scope target, all on
-pure Python text/metadata - no Lean, no kernel gate needed. See
+synthetic unexercised hypothesis, a synthetic overclaiming name, and a
+synthetic narrowed-scope target, all on pure Python text/metadata and
+reported counts - no Lean, no kernel gate needed. See
 reference/examples/ for a Lean-backed worked version of the vacuity
 case."""
 
@@ -8,7 +9,13 @@ from __future__ import annotations
 
 import unittest
 
-from autoprover_ref.audit import TargetProvenance, check_scope, run_audit
+from autoprover_ref.audit import (
+    ObligationHypothesisEvidence,
+    TargetProvenance,
+    check_scope,
+    check_unexercised_hypothesis,
+    run_audit,
+)
 
 
 class VacuityCheckTests(unittest.TestCase):
@@ -52,6 +59,165 @@ class VacuityCheckTests(unittest.TestCase):
         self.assertEqual(verdict.verdict, "pass")
 
 
+class UnexercisedHypothesisTests(unittest.TestCase):
+    """The mirror image of the vacuity check: the hypothesis fires, but
+    nothing the checker enumerated ever failed to satisfy it, so the
+    implication was never exercised as an implication."""
+
+    @staticmethod
+    def provenance_with(*evidence: ObligationHypothesisEvidence) -> TargetProvenance:
+        return TargetProvenance(
+            source="synthetic",
+            statement_text="forall (s : State), Ready s -> Safe s",
+            claim_keywords=(),
+            preconditions=("Ready s",),
+            non_vacuity_witness="model-checked: 12 states satisfy Ready",
+            obligation_evidence=evidence,
+        )
+
+    def test_flags_precondition_no_explored_state_violated(self):
+        # Every one of the 12 explored states satisfied `Ready`, so the
+        # guard pruned nothing: what was checked is the unconditional
+        # property, and `Ready` itself was never put to work.
+        provenance = self.provenance_with(ObligationHypothesisEvidence(
+            obligation_id="ready_implies_safe",
+            has_precondition=True,
+            states_satisfying=12,
+            states_violating=0,
+            exhaustive=True,
+        ))
+        verdict = run_audit("ready_implies_safe", "cand1", provenance)
+        self.assertEqual(verdict.verdict, "fail")
+        self.assertEqual(verdict.failure_reason, "unexercised-hypothesis")
+        flagged = verdict.details["unexercised"]
+        self.assertEqual(flagged[0]["obligation_id"], "ready_implies_safe")
+        self.assertEqual(flagged[0]["states_violating_precondition"], 0)
+        # `exhaustive` changes what the finding means, so it is recorded.
+        self.assertTrue(flagged[0]["exploration_exhaustive"])
+
+    def test_flags_on_a_bound_truncated_exploration_too_but_records_it(self):
+        provenance = self.provenance_with(ObligationHypothesisEvidence(
+            obligation_id="ready_implies_safe",
+            has_precondition=True,
+            states_satisfying=5,
+            states_violating=0,
+            exhaustive=False,
+        ))
+        verdict = run_audit("ready_implies_safe", "cand1", provenance)
+        self.assertEqual(verdict.failure_reason, "unexercised-hypothesis")
+        self.assertFalse(verdict.details["unexercised"][0]["exploration_exhaustive"])
+
+    def test_passes_when_some_explored_state_violated_the_precondition(self):
+        # The guard pruned 7 of 19 states: the implication was genuinely
+        # exercised on both sides.
+        provenance = self.provenance_with(ObligationHypothesisEvidence(
+            obligation_id="ready_implies_safe",
+            has_precondition=True,
+            states_satisfying=12,
+            states_violating=7,
+            exhaustive=True,
+        ))
+        verdict = run_audit("ready_implies_safe", "cand1", provenance)
+        self.assertEqual(verdict.verdict, "pass")
+        self.assertIsNone(verdict.failure_reason)
+        self.assertTrue(verdict.details["unexercised_hypothesis"]["judged"])
+
+    def test_abstains_when_no_obligation_evidence_recorded(self):
+        # A proof-kernel target has no enumerated state space at all, so
+        # there is nothing to count and nothing to judge.
+        provenance = TargetProvenance(
+            source="synthetic",
+            statement_text="forall (n : Nat), 0 < n -> 1 <= n",
+            claim_keywords=(),
+            preconditions=("0 < n",),
+            non_vacuity_witness="decide-checked instance: n = 1",
+        )
+        ok, details = check_unexercised_hypothesis(provenance)
+        self.assertTrue(ok)
+        self.assertFalse(details["judged"])
+
+    def test_unconditional_obligation_is_skipped_not_flagged(self):
+        # An obligation with no precondition never claimed to be
+        # restricted, so it has no hypothesis to leave unexercised.
+        provenance = self.provenance_with(ObligationHypothesisEvidence(
+            obligation_id="always_safe",
+            has_precondition=False,
+            states_satisfying=0,
+            states_violating=0,
+            exhaustive=True,
+        ))
+        ok, details = check_unexercised_hypothesis(provenance)
+        self.assertTrue(ok)
+        self.assertEqual(details["obligations_judged"], [])
+        self.assertEqual(details["skipped"][0]["obligation_id"], "always_safe")
+
+    def test_never_fired_precondition_defers_to_the_vacuity_reporting(self):
+        # Zero satisfying states is the vacuous/not-exercised case the
+        # checker already reports per obligation; flagging it again here
+        # would flatten two distinct findings into one verdict.
+        provenance = self.provenance_with(ObligationHypothesisEvidence(
+            obligation_id="ready_implies_safe",
+            has_precondition=True,
+            states_satisfying=0,
+            states_violating=9,
+            exhaustive=True,
+        ))
+        ok, details = check_unexercised_hypothesis(provenance)
+        self.assertTrue(ok)
+        self.assertEqual(details["obligations_judged"], [])
+        self.assertIn("vacuous/not-exercised", details["skipped"][0]["reason"])
+
+    def test_one_flagged_obligation_among_several_fails_the_audit(self):
+        provenance = self.provenance_with(
+            ObligationHypothesisEvidence(
+                obligation_id="exercised", has_precondition=True,
+                states_satisfying=4, states_violating=2, exhaustive=True,
+            ),
+            ObligationHypothesisEvidence(
+                obligation_id="unexercised", has_precondition=True,
+                states_satisfying=6, states_violating=0, exhaustive=True,
+            ),
+        )
+        verdict = run_audit("t", "c", provenance)
+        self.assertEqual(verdict.failure_reason, "unexercised-hypothesis")
+        flagged_ids = [e["obligation_id"] for e in verdict.details["unexercised"]]
+        self.assertEqual(flagged_ids, ["unexercised"])
+        self.assertEqual(verdict.details["obligations_judged"], ["exercised", "unexercised"])
+
+    def test_vacuity_is_reported_before_unexercised_hypothesis(self):
+        # Both checks would fail; the more basic one short-circuits, and
+        # exactly one reason is reported.
+        provenance = TargetProvenance(
+            source="synthetic",
+            statement_text="forall (s : State), Ready s -> Safe s",
+            claim_keywords=(),
+            preconditions=("Ready s",),
+            non_vacuity_witness=None,
+            obligation_evidence=(ObligationHypothesisEvidence(
+                obligation_id="ready_implies_safe", has_precondition=True,
+                states_satisfying=12, states_violating=0, exhaustive=True,
+            ),),
+        )
+        verdict = run_audit("t", "c", provenance)
+        self.assertEqual(verdict.failure_reason, "vacuous-precondition")
+
+    def test_unexercised_hypothesis_is_reported_before_name_content(self):
+        provenance = TargetProvenance(
+            source="synthetic",
+            # Would also fail name/content: claims "sorted", states nothing of the kind.
+            statement_text="forall (s : State), Ready s -> length (f s) = length s",
+            claim_keywords=("sorted",),
+            preconditions=("Ready s",),
+            non_vacuity_witness="model-checked: 12 states satisfy Ready",
+            obligation_evidence=(ObligationHypothesisEvidence(
+                obligation_id="ready_implies_safe", has_precondition=True,
+                states_satisfying=12, states_violating=0, exhaustive=True,
+            ),),
+        )
+        verdict = run_audit("t", "c", provenance)
+        self.assertEqual(verdict.failure_reason, "unexercised-hypothesis")
+
+
 class NameContentMismatchTests(unittest.TestCase):
     def test_flags_overclaiming_name(self):
         # Named/claimed "sorted", but the statement only constrains length.
@@ -93,6 +259,10 @@ class NameContentMismatchTests(unittest.TestCase):
         verdict = run_audit("trivially_correct", "cand1", provenance)
         self.assertEqual(verdict.verdict, "pass")
         self.assertEqual(verdict.details["name_content"]["keywords_judged"], [])
+        self.assertEqual(
+            verdict.details["checks_run"],
+            ["vacuity", "unexercised_hypothesis", "name_content", "scope"],
+        )
 
     def test_vacuity_checked_before_name_content_short_circuits(self):
         provenance = TargetProvenance(

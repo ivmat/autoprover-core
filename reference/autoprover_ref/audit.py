@@ -3,18 +3,25 @@
 A proof checker answers exactly one question: does this proof term
 establish this formal statement, given these definitions? It answers
 nothing about whether that statement is the theorem anyone wanted, or
-whether it says anything at all. This module implements three structural
+whether it says anything at all. This module implements four structural
 checks that catch what the kernel structurally cannot see:
 
   (a) vacuity  — does the target's provenance ship evidence that its
       declared preconditions can actually fire, or could the "theorem"
       hold for the trivial reason that its hypothesis is never
       satisfiable?
-  (b) name/content mismatch — do the claim keywords a target's name or
+  (b) unexercised hypothesis — for a target checked by enumeration
+      (a bounded model checker), did any enumerated state actually
+      VIOLATE the obligation's precondition? A precondition that every
+      explored state satisfies never pruned anything, so the implication
+      was never exercised as an implication. This is the mirror image of
+      (a) and a distinct failure mode: (a) asks whether the hypothesis
+      ever fired, (b) asks whether it ever failed to.
+  (c) name/content mismatch — do the claim keywords a target's name or
       changelog entry would use show up reflected in the formal
       statement text, or does the name overclaim what was actually
       proved?
-  (c) scope narrower than claimed — if the target's provenance declares a
+  (d) scope narrower than claimed — if the target's provenance declares a
       claimed scope that asserts generality ("for all n", "arbitrary
       graph"), does the formal statement text show structural evidence
       of being restricted to a fixed instance instead (a quantified
@@ -22,14 +29,17 @@ checks that catch what the kernel structurally cannot see:
       carrier standing in for "arbitrary X", or no quantified-variable
       binder at all)?
 
-All three checks are HONEST HEURISTICS, not sound verification. They
-operate on provenance metadata and statement *text*, not on formal
-semantics: "no non-vacuity witness recorded" proves the provenance record
-didn't demonstrate satisfiability, not that the precondition truly is
-unsatisfiable; "no expected keyword found in the statement text" is a
-lexical check, not a proof that the name overclaims; "no quantified
-binder found" is a syntactic pattern match, not a proof the statement is
-actually about a single instance. A target can pass all three checks and
+All four checks are HONEST HEURISTICS, not sound verification. They
+operate on provenance metadata, statement *text*, and reported
+enumeration counts, not on formal semantics: "no non-vacuity witness
+recorded" proves the provenance record didn't demonstrate satisfiability,
+not that the precondition truly is unsatisfiable; "no explored state
+violated this precondition" is a fact about the states one run happened
+to enumerate, not a proof that the hypothesis is redundant; "no expected
+keyword found in the statement text" is a lexical check, not a proof that
+the name overclaims; "no quantified binder found" is a syntactic pattern
+match, not a proof the statement is actually about a single instance. A
+target can pass all four checks and
 still be wrong in a way a human would catch immediately, and a target can
 fail one on a false positive (an unusual but legitimate phrasing). This is
 exactly the trade-off ARCHITECTURE.md §7 draws between a kernel verdict
@@ -48,12 +58,41 @@ from dataclasses import dataclass
 from .receipts import AuditVerdict, now_iso
 
 __all__ = [
+    "ObligationHypothesisEvidence",
     "TargetProvenance",
     "check_vacuity",
+    "check_unexercised_hypothesis",
     "check_name_content",
     "check_scope",
     "run_audit",
 ]
+
+
+@dataclass(frozen=True)
+class ObligationHypothesisEvidence:
+    """What an enumerating checker (a bounded model checker) reports back
+    about ONE obligation's precondition, so the audit layer can ask
+    whether the implication was ever exercised.
+
+    `states_satisfying` and `states_violating` are counts over exactly the
+    states that run enumerated — not over the system's reachable set,
+    unless `exhaustive` is True. `has_precondition` distinguishes "this
+    obligation is an implication whose guard we counted" from "this
+    obligation is unconditional, so there is no hypothesis to exercise";
+    an unconditional obligation is never flagged by
+    `check_unexercised_hypothesis`, because it makes no conditional claim
+    to begin with.
+
+    `model_checker.hypothesis_coverage` builds these records from an
+    `ExplorationResult`; nothing in this module computes them, and nothing
+    in this module re-runs the checker.
+    """
+
+    obligation_id: str
+    has_precondition: bool
+    states_satisfying: int
+    states_violating: int
+    exhaustive: bool
 
 
 @dataclass(frozen=True)
@@ -83,6 +122,13 @@ class TargetProvenance:
     it unset means "no scope claim was declared to check against" — see
     `check_scope`'s docstring for why that makes the check abstain rather
     than guess.
+
+    `obligation_evidence`, if present, is what an enumerating checker
+    reported about each obligation's precondition (see
+    `ObligationHypothesisEvidence`). It is only available for targets
+    discharged by enumeration; a target checked by a proof kernel has no
+    enumerated state space and therefore records none, which makes
+    `check_unexercised_hypothesis` abstain rather than guess.
     """
 
     source: str
@@ -91,6 +137,7 @@ class TargetProvenance:
     preconditions: tuple[str, ...] = ()
     non_vacuity_witness: str | None = None
     claimed_scope: str | None = None
+    obligation_evidence: tuple[ObligationHypothesisEvidence, ...] = ()
 
 
 # A small, explicit lexicon mapping a claim keyword to substrings whose
@@ -129,6 +176,93 @@ def check_vacuity(provenance: TargetProvenance) -> tuple[bool, dict]:
             "missing_witness_for": list(provenance.preconditions),
         }
     return True, {"check": "vacuity", "preconditions_checked": list(provenance.preconditions)}
+
+
+def check_unexercised_hypothesis(provenance: TargetProvenance) -> tuple[bool, dict]:
+    """Heuristic (b). For a target discharged by enumeration, flags an
+    obligation whose precondition NO enumerated state violated: the guard
+    pruned nothing, so the implication `pre(s) -> prop(s)` was never
+    exercised as an implication — every state the checker looked at went
+    down the `pre` branch. What was actually established over the explored
+    set is the unconditional property; the stated hypothesis is untested,
+    and a hypothesis that is accidentally always true (a typo, a
+    tautological guard, a fixture too narrow to generate a violating
+    state) is indistinguishable from a genuine one at the verdict level.
+    This is the "unexercised precondition" pattern (cf. formal-verification
+    review practice), and it is a DIFFERENT risk from the one
+    `check_vacuity` covers: that check asks whether the hypothesis can
+    ever fire at all, this one asks whether it ever failed to.
+
+    Three deliberate non-flags, each an abstain rather than a guess:
+
+      * no `obligation_evidence` recorded — nothing was enumerated (a
+        proof-kernel target, say), so there are no counts to judge;
+      * an obligation with `has_precondition=False` — an unconditional
+        obligation makes no conditional claim, so it has no hypothesis to
+        exercise;
+      * an obligation whose precondition held on ZERO enumerated states —
+        that is the vacuity/not-exercised case, already reported per
+        obligation by the checker itself (`model_checker.check_obligations`
+        returns `vacuous` or `not-exercised` there) and by `check_vacuity`
+        upstream. Reporting it again here would flatten two distinct
+        findings into one ambiguous verdict.
+
+    `exhaustive` is carried into the details rather than gating the flag,
+    because it changes what the finding MEANS, not whether there is one:
+    on an exhaustive exploration "no state violates this precondition"
+    says the hypothesis is redundant over the system's whole reachable
+    set; on a bound-truncated one it says only that this run never
+    enumerated a violating state. Either way the implication went
+    unexercised in the evidence on offer.
+    """
+    evidence = provenance.obligation_evidence
+    if not evidence:
+        return True, {
+            "check": "unexercised_hypothesis",
+            "judged": False,
+            "reason": "no enumerated-obligation evidence recorded",
+        }
+
+    unexercised: list[dict] = []
+    judged: list[str] = []
+    skipped: list[dict] = []
+    for record in evidence:
+        if not record.has_precondition:
+            skipped.append({
+                "obligation_id": record.obligation_id,
+                "reason": "unconditional obligation (no hypothesis to exercise)",
+            })
+            continue
+        if record.states_satisfying == 0:
+            skipped.append({
+                "obligation_id": record.obligation_id,
+                "reason": "precondition never fired; reported as vacuous/not-exercised, "
+                          "not as an unexercised hypothesis",
+            })
+            continue
+        judged.append(record.obligation_id)
+        if record.states_violating == 0:
+            unexercised.append({
+                "obligation_id": record.obligation_id,
+                "states_satisfying_precondition": record.states_satisfying,
+                "states_violating_precondition": 0,
+                "exploration_exhaustive": record.exhaustive,
+            })
+
+    if unexercised:
+        return False, {
+            "check": "unexercised_hypothesis",
+            "judged": True,
+            "obligations_judged": judged,
+            "unexercised": unexercised,
+            "skipped": skipped,
+        }
+    return True, {
+        "check": "unexercised_hypothesis",
+        "judged": bool(judged),
+        "obligations_judged": judged,
+        "skipped": skipped,
+    }
 
 
 def check_name_content(provenance: TargetProvenance) -> tuple[bool, dict]:
@@ -255,13 +389,19 @@ def check_scope(provenance: TargetProvenance) -> tuple[bool, dict]:
 
 
 def run_audit(target_id: str, candidate_id: str, provenance: TargetProvenance) -> AuditVerdict:
-    """Run all three structural checks in order and produce a single
-    structured AuditVerdict. Vacuity is checked first, then name/content,
-    then scope: a vacuous precondition makes the name/content and scope
-    questions moot (there is no "content" or "scope" worth judging if the
-    theorem never really fires), so the first failing check
-    short-circuits and is reported — never multiple reasons flattened
-    into one ambiguous verdict.
+    """Run all four structural checks in order and produce a single
+    structured AuditVerdict. The order is vacuity, then unexercised
+    hypothesis, then name/content, then scope, and the first failing
+    check short-circuits and is reported — never multiple reasons
+    flattened into one ambiguous verdict.
+
+    Why that order: the two hypothesis checks come first because they ask
+    whether the claim has any content at all, and a claim that never
+    fires makes the name/content and scope questions moot. Between them,
+    vacuity comes first because "the hypothesis can never hold" is the
+    more basic failure than "the hypothesis never failed to hold": a
+    target with no non-vacuity witness has nothing for the enumeration
+    counts to be about.
     """
     vacuity_ok, vacuity_details = check_vacuity(provenance)
     if not vacuity_ok:
@@ -271,6 +411,17 @@ def run_audit(target_id: str, candidate_id: str, provenance: TargetProvenance) -
             verdict="fail",
             failure_reason="vacuous-precondition",
             details=vacuity_details,
+            produced_at=now_iso(),
+        )
+
+    unexercised_ok, unexercised_details = check_unexercised_hypothesis(provenance)
+    if not unexercised_ok:
+        return AuditVerdict(
+            target_id=target_id,
+            candidate_id=candidate_id,
+            verdict="fail",
+            failure_reason="unexercised-hypothesis",
+            details=unexercised_details,
             produced_at=now_iso(),
         )
 
@@ -302,8 +453,9 @@ def run_audit(target_id: str, candidate_id: str, provenance: TargetProvenance) -
         verdict="pass",
         failure_reason=None,
         details={
-            "checks_run": ["vacuity", "name_content", "scope"],
+            "checks_run": ["vacuity", "unexercised_hypothesis", "name_content", "scope"],
             "vacuity": vacuity_details,
+            "unexercised_hypothesis": unexercised_details,
             "name_content": name_content_details,
             "scope": scope_details,
         },

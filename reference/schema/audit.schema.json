@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "$id": "https://autoprover-core.example/schema/audit.schema.json",
   "title": "Semantic Audit Verdict",
-  "schemaVersion": "1.0.0",
-  "description": "A structured, machine-readable verdict from the semantic audit layer (ARCHITECTURE.md §5). This layer is heuristic, not sound: it checks correspondence between a kernel-accepted statement and its stated intent, not a fact with an independent re-derivation procedure (ARCHITECTURE.md §7). failure_reason is null iff verdict == 'pass' (INTERFACES.md property 3: null never means a guess, it is the explicit encoding of 'no failure').",
+  "schemaVersion": "1.1.0",
+  "description": "A structured, machine-readable verdict from the semantic audit layer (ARCHITECTURE.md §5). This layer is heuristic, not sound: it checks correspondence between a kernel-accepted statement and its stated intent, not a fact with an independent re-derivation procedure (ARCHITECTURE.md §7). failure_reason is null iff verdict == 'pass' (INTERFACES.md property 3: null never means a guess, it is the explicit encoding of 'no failure'). Version history: 1.0.0 is the original format; 1.1.0 adds the 'unexercised-hypothesis' failure reason (an enumerating checker found no explored state that VIOLATED an obligation's precondition, so the implication was never exercised) and changes nothing else. Adding a value to a closed enum is a change a consumer must be able to notice, so it travels with a version bump (INTERFACES.md property 5); 1.0.0 documents remain valid and may not carry the 1.1.0-only reason.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -18,7 +18,8 @@
   "properties": {
     "schema_version": {
       "type": "string",
-      "const": "1.0.0"
+      "enum": ["1.0.0", "1.1.0"],
+      "description": "The format version this document was written to. Both accepted versions validate; the allOf block below forbids a 1.0.0 document from carrying a failure reason introduced in 1.1.0."
     },
     "target_id": {"type": "string", "minLength": 1},
     "candidate_id": {"type": "string", "minLength": 1},
@@ -31,6 +32,7 @@
       "type": ["string", "null"],
       "enum": [
         "vacuous-precondition",
+        "unexercised-hypothesis",
         "name-content-mismatch",
         "scope-narrower-than-claimed",
         null
@@ -52,12 +54,29 @@
       "then": {"properties": {"failure_reason": {"const": null}}}
     },
     {
+      "if": {"properties": {"schema_version": {"const": "1.0.0"}}},
+      "then": {
+        "properties": {
+          "failure_reason": {
+            "description": "A 1.0.0 document predates the 'unexercised-hypothesis' reason and may not use it.",
+            "enum": [
+              "vacuous-precondition",
+              "name-content-mismatch",
+              "scope-narrower-than-claimed",
+              null
+            ]
+          }
+        }
+      }
+    },
+    {
       "if": {"properties": {"verdict": {"const": "fail"}}},
       "then": {
         "properties": {
           "failure_reason": {
             "enum": [
               "vacuous-precondition",
+              "unexercised-hypothesis",
               "name-content-mismatch",
               "scope-narrower-than-claimed"
             ]

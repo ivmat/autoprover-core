@@ -38,7 +38,9 @@ Follow a single target from idea to accepted, matching the sections of
    certificate — the code enforces that distinction in the receipt type,
    not in a comment.
 5. **Audit (§5).** A kernel-accepted candidate still has to pass a semantic
-   audit (`audit.py`): is the precondition satisfiable (non-vacuous), does
+   audit (`audit.py`): is the precondition satisfiable (non-vacuous); for
+   a target discharged by enumeration, did any enumerated state actually
+   violate that precondition, or did the hypothesis go unexercised; does
    the statement correspond to its claimed name and scope? These checks are
    honest heuristics — they abstain rather than guess — and a failure
    routes the target back to the queue, it is not silently dropped.
