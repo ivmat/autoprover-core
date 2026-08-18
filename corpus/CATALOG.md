@@ -1,6 +1,6 @@
 # Corpus Catalog
 
-This is the navigational index for the AutoproverCorpus: 65 Lean 4 modules of
+This is the navigational index for the AutoproverCorpus: 66 Lean 4 modules of
 machine-checked classical results, organized into 7 subject areas. Every module is
 kernel-checked core Lean with **no mathlib and no external libraries** — each proof
 stands on its own. The corpus claims **no novelty**: every result is a formalization of
@@ -52,8 +52,9 @@ Concurrency: 6 modules.
 | TwoPhaseCommitBlockingReachable | 2PC blocking, as a reachable execution of the explicit state machine (crash as an event, not a missing case). | Classical (Gray, 1978; Skeen, 1981). | full |
 | TwoPhaseCommitMachine | No reachable state of the explicit 2PC machine has one participant committed and another aborted. | Classical (Gray, 1978). | full |
 | VectorClockCausality | Vector-clock order holds between two events iff the first happens-before the second, with a concurrency witness. | Classical (Fidge, 1988; Mattern, 1989). | full |
+| WeightedVotingQuorum | Two quorums gathering more votes than the system holds share a voter, giving Gifford's `R + W > N` and `W + W > N` conditions; the strict inequality is shown tight. | D. K. Gifford, "Weighted Voting for Replicated Data", 1979 (unweighted ancestor: R. H. Thomas, 1979). | full |
 
-Distributed: 17 modules.
+Distributed: 18 modules.
 
 ## Order
 
@@ -134,4 +135,4 @@ Security: 9 modules.
 
 ## Total
 
-7 areas, 65 modules (Concurrency 6, Distributed 17, Order 8, Probability 11, Processes 7, Reliability 7, Security 9); 44 flagged `full`, 21 flagged `scoped`.
+7 areas, 66 modules (Concurrency 6, Distributed 18, Order 8, Probability 11, Processes 7, Reliability 7, Security 9); 45 flagged `full`, 21 flagged `scoped`.

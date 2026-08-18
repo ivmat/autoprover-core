@@ -6,7 +6,7 @@ implementation of that pipeline.
 
 ## Contents
 
-- `corpus/` — 65 Lean modules formalizing classical results, bounded
+- `corpus/` — 66 Lean modules formalizing classical results, bounded
   variants, and counterexamples across seven areas (distributed systems,
   order theory, concurrency, process calculi, security, probability,
   reliability). Pure Lean core, no dependencies.

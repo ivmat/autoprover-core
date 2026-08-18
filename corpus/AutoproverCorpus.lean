@@ -21,6 +21,7 @@ import AutoproverCorpus.Distributed.TwoPhaseCommitBlocking
 import AutoproverCorpus.Distributed.TwoPhaseCommitBlockingReachable
 import AutoproverCorpus.Distributed.TwoPhaseCommitMachine
 import AutoproverCorpus.Distributed.VectorClockCausality
+import AutoproverCorpus.Distributed.WeightedVotingQuorum
 import AutoproverCorpus.Order.BoundedPath
 import AutoproverCorpus.Order.FiniteAcyclicSink
 import AutoproverCorpus.Order.KnasterTarski
