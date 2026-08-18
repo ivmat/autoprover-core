@@ -3,7 +3,9 @@ import AutoproverCorpus.Concurrency.DekkerMutex
 import AutoproverCorpus.Concurrency.PetersonMutex
 import AutoproverCorpus.Concurrency.ResourceOrderingAcyclic
 import AutoproverCorpus.Concurrency.SubscheduleSerializability
+import AutoproverCorpus.Concurrency.TicketLockMutualExclusion
 import AutoproverCorpus.Concurrency.TwoPhaseLocking
+import AutoproverCorpus.Concurrency.WaitDieDeadlockFree
 import AutoproverCorpus.Distributed.AbstractQuorumSystem
 import AutoproverCorpus.Distributed.ByzantineThreshold
 import AutoproverCorpus.Distributed.ByzantineTightness

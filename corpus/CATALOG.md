@@ -1,6 +1,6 @@
 # Corpus Catalog
 
-This is the navigational index for the AutoproverCorpus: 70 Lean 4 modules of
+This is the navigational index for the AutoproverCorpus: 72 Lean 4 modules of
 machine-checked classical results, organized into 7 subject areas. Every module is
 kernel-checked core Lean with **no mathlib and no external libraries** — each proof
 stands on its own. The corpus claims **no novelty**: every result is a formalization of
@@ -27,9 +27,11 @@ implied by its name.
 | PetersonMutex | Peterson's algorithm guarantees mutual exclusion, via a finite inductive invariant checked by `decide`. | G. L. Peterson, 1981. | full |
 | ResourceOrderingAcyclic | Ordered resource acquisition (fixed global order) keeps the wait-for graph acyclic, excluding circular wait. | Classical (Havender, 1968; Coffman conditions, 1971). | scoped — safety only; the deadlock-freedom corollary is disclosed but not proved here |
 | SubscheduleSerializability | Removing operations (or a whole transaction) from a conflict-serializable schedule keeps it conflict-serializable. | Classical closure property of conflict-serializability. | scoped — one direction; the converse (upward closure) is refuted with a witness |
+| TicketLockMutualExclusion | The ticket lock guarantees mutual exclusion for an arbitrary number of threads, via an inductive invariant whose load-bearing clause is ticket distinctness. | Classical (ticket lock; Reed and Kanodia, 1979; analysed in Mellor-Crummey and Scott, 1991; ancestor Lamport's bakery, 1974). | scoped — safety (mutual exclusion) only, no FIFO-fairness/liveness; fetch-and-increment assumed atomic |
 | TwoPhaseLocking | Two-phase locking implies conflict-serializability (acyclic precedence graph). | Classical (Eswaran, Gray, Lorie and Traiger, 1976). | full |
+| WaitDieDeadlockFree | Wait-die and wound-wait timestamp rules keep the wait-for graph acyclic, excluding circular wait; both are instances of one monotone-potential lemma. | D. J. Rosenkrantz, R. E. Stearns and P. M. Lewis II, ACM TODS, 1978. | scoped — safety (no circular wait) only; the no-starvation liveness argument and the abort/restart machinery are not formalized |
 
-Concurrency: 6 modules.
+Concurrency: 8 modules.
 
 ## Distributed
 
@@ -139,4 +141,4 @@ Security: 11 modules.
 
 ## Total
 
-7 areas, 70 modules (Concurrency 6, Distributed 18, Order 8, Probability 13, Processes 7, Reliability 7, Security 11); 47 flagged `full`, 23 flagged `scoped`.
+7 areas, 72 modules (Concurrency 8, Distributed 18, Order 8, Probability 13, Processes 7, Reliability 7, Security 11); 47 flagged `full`, 25 flagged `scoped`.
