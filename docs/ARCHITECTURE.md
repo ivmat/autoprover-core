@@ -129,9 +129,9 @@ establish this formal statement, given these definitions?* It answers
 nothing about whether that formal statement is the theorem anyone wanted,
 or whether it says anything at all.
 
-Two well-known failure modes make this concrete, and both are visible
-without any private example — they show up constantly in ordinary formal
-verification work, including public tooling:
+Two failure modes make this concrete. Both are well-known failure modes
+in ordinary formal-verification work — they show up constantly in public
+tooling and in the review practice around it:
 
 - **Vacuous acceptance.** A statement of the form "if P then Q" is proved
   the moment P is shown to be impossible — Q never has to hold. A checker

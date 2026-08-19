@@ -43,10 +43,19 @@ the Lean-backed run; every test in `reference/tests/` still runs with no
 Lean installed at all.
 
 Receipts are written under `reference/examples/_run/` (gitignored — it's
-a run artifact, regenerated every time you run the script, not checked
-in as source).
+a run artifact, not checked in as source). Delete that directory before
+re-running: the queue and ratchet logs there are append-only, so a second
+run against an existing log finds `genuine` already in state `accepted`
+and refuses the transition. That refusal is the queue's evidence
+discipline working, not a bug — a fresh run starts from a fresh log.
 
 ## What actually happened when this was run
+
+The blocks below are copied from one real run's `_run/receipts/`. On disk
+the writer emits keys in sorted order; they are reordered here so the
+verdict-bearing fields read first. Timestamps are that run's — yours will
+differ, and nothing but the timestamps and the elided absolute path
+should.
 
 Both targets reach `kernel verdict: accepted` — the kernel is a sound
 oracle for exactly the question it answers ("does this derivation
@@ -90,7 +99,7 @@ cloned this repository:
       "status": "held"
     }
   ],
-  "produced_at": "2026-08-19T08:15:12.109137+00:00"
+  "produced_at": "2026-08-19T09:14:10.764368+00:00"
 }
 ```
 
@@ -115,7 +124,7 @@ and its audit verdict (`genuine.genuine-v1.audit.json`) — `pass`, with
     "scope": {"check": "scope", "judged": false, "reason": "no claimed_scope declared"},
     "controls": {"check": "controls", "judged": false, "reason": "no claim_grade declared"}
   },
-  "produced_at": "2026-08-19T08:15:12.114710+00:00"
+  "produced_at": "2026-08-19T09:14:10.769480+00:00"
 }
 ```
 
@@ -136,7 +145,7 @@ difference becomes a structured, machine-readable fact:
     "check": "vacuity",
     "missing_witness_for": ["l.length < 0"]
   },
-  "produced_at": "2026-08-19T08:15:12.223776+00:00"
+  "produced_at": "2026-08-19T09:14:10.872570+00:00"
 }
 ```
 
@@ -144,7 +153,8 @@ Because the ratchet (`autoprover_ref/ratchet.py`) only admits a target on
 a checker-accepted receipt **and** an audit-pass verdict together, the
 vacuous target never enters the accepted set — the pipeline instead logs
 a `RequeueDecision` and returns it to `queued` (see
-`autoprover_ref/pipeline.py`). Re-run `run_example.py` to reproduce this
+`autoprover_ref/pipeline.py`). Delete `_run/` and re-run
+`run_example.py` to reproduce this
 end to end; the script itself checks this exact pattern and prints
 `Expected pattern observed: True` on success.
 

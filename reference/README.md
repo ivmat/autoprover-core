@@ -100,8 +100,10 @@ python3 run_tests.py
 
 (equivalently: `PYTHONPATH=. python3 -m unittest discover -s tests -p "test_*.py" -v`,
 run from `reference/`). This is pure Python — **no Lean installation is
-needed** for anything under `tests/`. See "Report" in the delivery notes
-for the exact summary from the last run.
+needed** for anything under `tests/`. The runner prints the per-test
+summary and the total itself, so the current count is whatever your own
+run reports; `.github/workflows/ci.yml` runs exactly this command on
+every push.
 
 ## Running the worked example
 
@@ -231,9 +233,10 @@ the unexercised hypothesis was flagged.
 
 ## Divergences from a literal reading of ARCHITECTURE.md
 
-These are worth flagging explicitly — they are exactly the kind of
-finding that means a doc could be tightened, not bugs to silently paper
-over:
+`docs/ARCHITECTURE.md` is prose; this package is code, and in two places
+the code makes a choice the prose leaves open. Both are recorded here
+rather than smoothed over, because the difference is the kind of thing a
+reader reconciling the two documents will otherwise trip on:
 
 1. **The `kernel-checked → audited → accepted | audit-rejected` hop.**
    ARCHITECTURE.md §2's diagram draws one arrow chain through an
@@ -258,8 +261,9 @@ over:
    state's name is a holdover from the diagram, not a restriction" would
    close that gap.
 
-Three earlier divergences in this list have since been closed, and are
-recorded here as implemented rather than as gaps:
+Three further gaps between the prose and this package have since been
+closed. They are kept in this section, as implemented features rather
+than as gaps, so the history of the interface stays legible:
 
 - **Provenance, a reachable `error` verdict, coverage on the receipt, and
   control receipts** were all absent from receipt schema 1.0.0, and each
@@ -288,15 +292,15 @@ recorded here as implemented rather than as gaps:
   `failure_kind` to `error` with the kind recorded rather than to
   `rejected`.
 
-- **Obligation-level vacuity/not-exercised detection**, at the time this
-  note was first written, was not implemented anywhere in the pipeline:
+- **Obligation-level vacuity/not-exercised detection** has no home in the
+  kernel gate alone:
   `kernel_gate.KernelGate.check`'s default path only produces
   `held`/`failed` per obligation, because a plain accept/reject checker
   invocation (e.g. a whole-file `lean` run) has no way to know on its own
-  whether an obligation was vacuous or unexercised — the gate's
-  per-obligation `obligation_statuses` seam existed (see
-  `kernel_gate.CheckerResult.obligation_statuses`), but nothing shipped
-  in this package used it to produce `vacuous`/`not-exercised`.
+  whether an obligation was vacuous or unexercised. The gate exposes a
+  per-obligation `obligation_statuses` seam (see
+  `kernel_gate.CheckerResult.obligation_statuses`) for a checker that can
+  say more, but a bare kernel invocation cannot fill it.
   `autoprover_ref/model_checker.py` now closes that gap: its bounded
   breadth-first exploration derives `vacuous` (precondition unsatisfiable
   in an exhaustively-explored state space) vs. `not-exercised`
@@ -336,9 +340,9 @@ recorded here as implemented rather than as gaps:
   a question about the evidence set is worth asking only once every
   question about the statement itself has been answered.
 - **`scope-narrower-than-claimed`** was schema-defined but not
-  implemented — this reference package originally shipped only the two
-  checks the initial task specified (vacuity, name/content) and left this
-  one as a documented gap rather than a stub that would always vacuously
+  implemented — this reference package originally shipped only two audit
+  checks (vacuity, name/content) and left this one as a documented gap
+  rather than a stub that would always vacuously
   pass. `audit.check_scope` now implements it as a third structural
   heuristic: given a target's declared `claimed_scope` and its statement
   text, it flags a statement that shows structural evidence of being
