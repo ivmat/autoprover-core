@@ -81,12 +81,22 @@ class Pipeline:
         harness: Optional[str] = None,
         bound=None,
         env_assumptions: Optional[str] = None,
+        claim_receipts: Optional[Sequence[Receipt]] = None,
     ) -> PipelineResult:
         """Drive `target_id` from wherever it currently is (or from
         not-yet-enqueued) through the kernel gate and audit layer, and
         into the ratchet on full acceptance. Every boundary crossed
         writes a schema-validated receipt/verdict to `receipts_dir`
         before the queue state that depends on it is advanced.
+
+        `claim_receipts` is the evidence already gathered under this
+        target's claim — the set `audit.check_controls` searches for a
+        control anyone watched fail. It is a parameter rather than
+        something this method assembles because a pipeline run sees ONE
+        target and one candidate; the evidence set for a claim spans many
+        runs, and only the caller owning that store knows what is in it.
+        Passing None (the default) makes the control check abstain rather
+        than judge a set it was never shown.
         """
         candidate_file = Path(candidate_file)
 
@@ -134,7 +144,7 @@ class Pipeline:
                 accepted_entry=None,
             )
 
-        audit_verdict = run_audit(target_id, candidate_id, provenance)
+        audit_verdict = run_audit(target_id, candidate_id, provenance, claim_receipts)
         write_audit(self.receipts_dir / f"{target_id}.{candidate_id}.audit.json", audit_verdict)
         state = self.queue.record_audit(target_id, audit_verdict)
 

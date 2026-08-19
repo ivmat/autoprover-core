@@ -65,14 +65,15 @@ RECEIPT_SCHEMA_VERSION = "2.0.0"
 RECEIPT_SCHEMA_VERSIONS = ("1.0.0", "2.0.0")
 
 # 1.1.0 adds one failure reason (`unexercised-hypothesis`) to the audit
-# verdict's closed enum and changes nothing else. A new permitted value in
-# a closed enum is a change a consumer must be able to notice — a reader
-# built for 1.0.0 would meet a code it cannot branch on — so it travels
-# with a version bump rather than silently widening the contract
-# (INTERFACES.md property 5). The schema still accepts 1.0.0 documents and
-# forbids them from carrying the 1.1.0-only code; the receipt schema is
-# versioned separately and is unaffected.
-AUDIT_SCHEMA_VERSION = "1.1.0"
+# verdict's closed enum; 1.2.0 adds one more (`missing-control`). Each
+# changes nothing else. A new permitted value in a closed enum is a
+# change a consumer must be able to notice — a reader built for 1.0.0
+# would meet a code it cannot branch on — so it travels with a version
+# bump rather than silently widening the contract (INTERFACES.md
+# property 5). The schema still accepts every older version and forbids
+# each document from carrying a code its own version never defined; the
+# receipt schema is versioned separately and is unaffected.
+AUDIT_SCHEMA_VERSION = "1.2.0"
 
 _SCHEMA_DIR = Path(__file__).resolve().parent.parent / "schema"
 
@@ -96,6 +97,7 @@ _AUDIT_FAILURE_REASONS = (
     "unexercised-hypothesis",
     "name-content-mismatch",
     "scope-narrower-than-claimed",
+    "missing-control",
 )
 
 

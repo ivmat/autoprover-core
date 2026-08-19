@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "$id": "https://autoprover-core.example/schema/audit.schema.json",
   "title": "Semantic Audit Verdict",
-  "schemaVersion": "1.1.0",
-  "description": "A structured, machine-readable verdict from the semantic audit layer (ARCHITECTURE.md §5). This layer is heuristic, not sound: it checks correspondence between a kernel-accepted statement and its stated intent, not a fact with an independent re-derivation procedure (ARCHITECTURE.md §7). failure_reason is null iff verdict == 'pass' (INTERFACES.md property 3: null never means a guess, it is the explicit encoding of 'no failure'). Version history: 1.0.0 is the original format; 1.1.0 adds the 'unexercised-hypothesis' failure reason (an enumerating checker found no explored state that VIOLATED an obligation's precondition, so the implication was never exercised) and changes nothing else. Adding a value to a closed enum is a change a consumer must be able to notice, so it travels with a version bump (INTERFACES.md property 5); 1.0.0 documents remain valid and may not carry the 1.1.0-only reason.",
+  "schemaVersion": "1.2.0",
+  "description": "A structured, machine-readable verdict from the semantic audit layer (ARCHITECTURE.md §5). This layer is heuristic, not sound: it checks correspondence between a kernel-accepted statement and its stated intent, not a fact with an independent re-derivation procedure (ARCHITECTURE.md §7). failure_reason is null iff verdict == 'pass' (INTERFACES.md property 3: null never means a guess, it is the explicit encoding of 'no failure'). Version history: 1.0.0 is the original format; 1.1.0 adds the 'unexercised-hypothesis' failure reason (an enumerating checker found no explored state that VIOLATED an obligation's precondition, so the implication was never exercised); 1.2.0 adds the 'missing-control' failure reason (a claim presented as contract-grade carries no control receipt that was watched to fail, so nothing shows its oracle can fail at all). Each addition changes nothing else. Adding a value to a closed enum is a change a consumer must be able to notice, so it travels with a version bump (INTERFACES.md property 5); older documents remain valid and may not carry a reason their own version never defined.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -18,8 +18,8 @@
   "properties": {
     "schema_version": {
       "type": "string",
-      "enum": ["1.0.0", "1.1.0"],
-      "description": "The format version this document was written to. Both accepted versions validate; the allOf block below forbids a 1.0.0 document from carrying a failure reason introduced in 1.1.0."
+      "enum": ["1.0.0", "1.1.0", "1.2.0"],
+      "description": "The format version this document was written to. Every published version validates; the allOf blocks below forbid a document from carrying a failure reason introduced after its own version."
     },
     "target_id": {"type": "string", "minLength": 1},
     "candidate_id": {"type": "string", "minLength": 1},
@@ -35,6 +35,7 @@
         "unexercised-hypothesis",
         "name-content-mismatch",
         "scope-narrower-than-claimed",
+        "missing-control",
         null
       ]
     },
@@ -58,9 +59,26 @@
       "then": {
         "properties": {
           "failure_reason": {
-            "description": "A 1.0.0 document predates the 'unexercised-hypothesis' reason and may not use it.",
+            "description": "A 1.0.0 document predates the 'unexercised-hypothesis' and 'missing-control' reasons and may not use either.",
             "enum": [
               "vacuous-precondition",
+              "name-content-mismatch",
+              "scope-narrower-than-claimed",
+              null
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"schema_version": {"const": "1.1.0"}}},
+      "then": {
+        "properties": {
+          "failure_reason": {
+            "description": "A 1.1.0 document predates the 'missing-control' reason and may not use it.",
+            "enum": [
+              "vacuous-precondition",
+              "unexercised-hypothesis",
               "name-content-mismatch",
               "scope-narrower-than-claimed",
               null
@@ -78,7 +96,8 @@
               "vacuous-precondition",
               "unexercised-hypothesis",
               "name-content-mismatch",
-              "scope-narrower-than-claimed"
+              "scope-narrower-than-claimed",
+              "missing-control"
             ]
           }
         }

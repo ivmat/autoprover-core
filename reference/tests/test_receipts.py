@@ -193,7 +193,7 @@ class ReceiptRoundTripTests(TempDirCase):
         write_audit(path, verdict)
         loaded = load_audit(path)
         self.assertEqual(loaded, verdict)
-        self.assertEqual(loaded.schema_version, "1.1.0")
+        self.assertEqual(loaded.schema_version, "1.2.0")
 
 
 class MalformedDocumentTests(unittest.TestCase):
@@ -306,6 +306,45 @@ class MalformedDocumentTests(unittest.TestCase):
             "details": {}, "produced_at": now_iso(),
         }
         validate_audit_dict(doc)  # must not raise
+
+    def test_audit_schema_accepts_the_1_2_0_failure_reason(self):
+        doc = {
+            "schema_version": "1.2.0", "target_id": "t", "candidate_id": "c",
+            "verdict": "fail", "failure_reason": "missing-control",
+            "details": {"check": "controls"}, "produced_at": now_iso(),
+        }
+        validate_audit_dict(doc)  # must not raise
+
+    def test_audit_schema_forbids_the_1_2_0_reason_in_older_documents(self):
+        # Each version may carry only the codes it defined; a reader
+        # built for 1.1.0 must be able to tell "old-format verdict" from
+        # "a code I cannot branch on" (INTERFACES.md property 5).
+        for version in ("1.0.0", "1.1.0"):
+            with self.subTest(schema_version=version):
+                doc = {
+                    "schema_version": version, "target_id": "t", "candidate_id": "c",
+                    "verdict": "fail", "failure_reason": "missing-control",
+                    "details": {}, "produced_at": now_iso(),
+                }
+                with self.assertRaises(SchemaValidationError):
+                    validate_audit_dict(doc)
+
+    def test_audit_schema_still_accepts_a_1_1_0_document(self):
+        doc = {
+            "schema_version": "1.1.0", "target_id": "t", "candidate_id": "c",
+            "verdict": "fail", "failure_reason": "unexercised-hypothesis",
+            "details": {}, "produced_at": now_iso(),
+        }
+        validate_audit_dict(doc)  # must not raise
+
+    def test_audit_schema_rejects_an_unpublished_version(self):
+        doc = {
+            "schema_version": "1.3.0", "target_id": "t", "candidate_id": "c",
+            "verdict": "pass", "failure_reason": None,
+            "details": {}, "produced_at": now_iso(),
+        }
+        with self.assertRaises(SchemaValidationError):
+            validate_audit_dict(doc)
 
     def test_load_receipt_raises_on_disk_corruption_not_silent_coerce(self):
         with TempDirCase.temp_dir() as d:

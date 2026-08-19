@@ -1,7 +1,8 @@
 """Tests for audit.py: catches a synthetic vacuously-true target, a
-synthetic unexercised hypothesis, a synthetic overclaiming name, and a
-synthetic narrowed-scope target, all on pure Python text/metadata and
-reported counts - no Lean, no kernel gate needed. See
+synthetic unexercised hypothesis, a synthetic overclaiming name, a
+synthetic narrowed-scope target, and a synthetic contract-grade claim
+with no control anyone watched fail - all on pure Python text/metadata,
+reported counts and receipt shapes; no Lean, no kernel gate needed. See
 reference/examples/ for a Lean-backed worked version of the vacuity
 case."""
 
@@ -12,10 +13,45 @@ import unittest
 from autoprover_ref.audit import (
     ObligationHypothesisEvidence,
     TargetProvenance,
+    check_controls,
     check_scope,
     check_unexercised_hypothesis,
     run_audit,
 )
+from autoprover_ref.receipts import (
+    Checker,
+    Control,
+    Obligation,
+    Receipt,
+    Subject,
+    Tool,
+    Toolchain,
+    now_iso,
+)
+
+
+def evidence_receipt(claim_id="claim-1", control=None, target_id="t") -> Receipt:
+    """A minimal 2.0.0 model-checker receipt, optionally a control."""
+    went_red = bool(control) and control.observed == "red"
+    return Receipt(
+        target_id=target_id,
+        candidate_id="cand1",
+        checker=Checker(kind="model-checker", name="checker-x", version="0.1.0"),
+        verdict="rejected" if went_red else "accepted",
+        certificate=None,
+        harness="harness_x",
+        bound=8,
+        env_assumptions="synthetic",
+        obligations=(Obligation(id=target_id, status="failed" if went_red else "held"),),
+        produced_at=now_iso(),
+        claim_id=claim_id,
+        subject=Subject(repo="example/subject", commit="0" * 40, unit=None),
+        toolchain=Toolchain(
+            tool=Tool(name="checker-x", commit_or_version="0" * 40),
+            dependencies=(), flags=(), features=None,
+        ),
+        control=control,
+    )
 
 
 class VacuityCheckTests(unittest.TestCase):
@@ -261,7 +297,7 @@ class NameContentMismatchTests(unittest.TestCase):
         self.assertEqual(verdict.details["name_content"]["keywords_judged"], [])
         self.assertEqual(
             verdict.details["checks_run"],
-            ["vacuity", "unexercised_hypothesis", "name_content", "scope"],
+            ["vacuity", "unexercised_hypothesis", "name_content", "scope", "controls"],
         )
 
     def test_vacuity_checked_before_name_content_short_circuits(self):
@@ -376,3 +412,202 @@ class ScopeCheckTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MissingControlTests(unittest.TestCase):
+    """A check nobody has watched fail is untested: a contract-grade
+    claim must carry a mutation control that was predicted red and
+    observed red."""
+
+    @staticmethod
+    def contract_provenance(**overrides) -> TargetProvenance:
+        fields = dict(
+            source="synthetic",
+            statement_text="forall (s : State), Ready s -> Safe s",
+            claim_keywords=(),
+            preconditions=("Ready s",),
+            non_vacuity_witness="model-checked: 12 states satisfy Ready",
+            claim_id="claim-1",
+            claim_grade="contract",
+        )
+        fields.update(overrides)
+        return TargetProvenance(**fields)
+
+    @staticmethod
+    def mutation(expectation="red", observed="red", of_claim="claim-1") -> Control:
+        return Control(
+            kind="mutation", expectation=expectation, observed=observed, of_claim=of_claim,
+        )
+
+    def test_passes_when_an_observed_red_mutation_control_is_present(self):
+        receipts = [evidence_receipt(), evidence_receipt(control=self.mutation())]
+        verdict = run_audit("t", "c", self.contract_provenance(), receipts)
+        self.assertEqual(verdict.verdict, "pass")
+        self.assertEqual(verdict.details["controls"]["observed_red_mutation_controls"], 1)
+
+    def test_fails_when_the_evidence_set_has_no_control_at_all(self):
+        receipts = [evidence_receipt(), evidence_receipt()]
+        verdict = run_audit("t", "c", self.contract_provenance(), receipts)
+        self.assertEqual(verdict.verdict, "fail")
+        self.assertEqual(verdict.failure_reason, "missing-control")
+        self.assertEqual(verdict.details["controls_found"], 0)
+        self.assertEqual(verdict.details["receipts_searched"], 2)
+
+    def test_fails_on_an_empty_but_supplied_evidence_set(self):
+        # Supplied-and-empty is a searched store with nothing in it,
+        # which is a finding - unlike "no store supplied", below.
+        verdict = run_audit("t", "c", self.contract_provenance(), [])
+        self.assertEqual(verdict.failure_reason, "missing-control")
+
+    def test_fails_when_the_mutation_control_did_not_behave_as_predicted(self):
+        # Predicted red, came back green: the oracle did NOT catch the
+        # planted defect. That is the opposite of reassurance.
+        receipts = [evidence_receipt(control=self.mutation(observed="green"))]
+        verdict = run_audit("t", "c", self.contract_provenance(), receipts)
+        self.assertEqual(verdict.failure_reason, "missing-control")
+        [other] = verdict.details["other_controls"]
+        self.assertFalse(other["behaved_as_predicted"])
+
+    def test_fails_when_only_an_ablation_control_is_present(self):
+        # An ablation attests something adjacent (that a precondition is
+        # load-bearing), not that this claim's oracle can fail.
+        ablation = Control(
+            kind="ablation", expectation="red", observed="red", of_claim="claim-1",
+        )
+        verdict = run_audit(
+            "t", "c", self.contract_provenance(), [evidence_receipt(control=ablation)]
+        )
+        self.assertEqual(verdict.failure_reason, "missing-control")
+        self.assertEqual(verdict.details["other_controls"][0]["kind"], "ablation")
+
+    def test_fails_when_only_a_green_predicted_mutation_control_is_present(self):
+        # The revert leg of a mutation experiment: it confirms the
+        # experiment was reversible, and shows nobody watching the oracle
+        # fail. Accepting it would let "somebody watched this fail" be
+        # satisfied by evidence that nobody ever did.
+        receipts = [evidence_receipt(control=self.mutation(expectation="green", observed="green"))]
+        verdict = run_audit("t", "c", self.contract_provenance(), receipts)
+        self.assertEqual(verdict.failure_reason, "missing-control")
+        self.assertTrue(verdict.details["other_controls"][0]["behaved_as_predicted"])
+
+    def test_fails_when_the_only_control_attests_a_different_claim(self):
+        # `of_claim` is what binds a control to a claim, and it is an
+        # explicit pointer - a control for someone else's claim is not
+        # evidence for this one.
+        receipts = [evidence_receipt(control=self.mutation(of_claim="claim-2"))]
+        verdict = run_audit("t", "c", self.contract_provenance(), receipts)
+        self.assertEqual(verdict.failure_reason, "missing-control")
+        self.assertEqual(verdict.details["controls_found"], 0)
+
+    def test_abstains_for_a_probe_grade_claim(self):
+        provenance = self.contract_provenance(claim_grade="probe")
+        ok, details = check_controls(provenance, [evidence_receipt()])
+        self.assertTrue(ok)
+        self.assertFalse(details["judged"])
+        self.assertIn("probe", details["reason"])
+
+    def test_abstains_when_no_grade_is_declared(self):
+        provenance = self.contract_provenance(claim_grade=None)
+        ok, details = check_controls(provenance, [evidence_receipt()])
+        self.assertTrue(ok)
+        self.assertFalse(details["judged"])
+
+    def test_abstains_when_no_receipt_set_is_supplied(self):
+        # Distinct from the empty set above: "I have no store to search"
+        # and "I searched and found nothing" are different statements.
+        ok, details = check_controls(self.contract_provenance(), None)
+        self.assertTrue(ok)
+        self.assertFalse(details["judged"])
+        self.assertIn("no receipt set supplied", details["reason"])
+
+    def test_run_audit_defaults_to_abstaining(self):
+        verdict = run_audit("t", "c", self.contract_provenance())
+        self.assertEqual(verdict.verdict, "pass")
+        self.assertFalse(verdict.details["controls"]["judged"])
+
+    def test_contract_grade_requires_a_claim_id_at_construction(self):
+        # Otherwise a contract claim whose evidence cannot be located
+        # would escape the check rather than fail it.
+        with self.assertRaises(ValueError):
+            self.contract_provenance(claim_id=None)
+
+    def test_unknown_claim_grade_rejected_at_construction(self):
+        with self.assertRaises(ValueError):
+            self.contract_provenance(claim_grade="pretty-sure")
+
+
+class CheckOrderingTests(unittest.TestCase):
+    """The control check runs LAST: it asks about the evidence set, not
+    about what the statement says, and every question about the statement
+    itself is more specific."""
+
+    @staticmethod
+    def provenance(**overrides) -> TargetProvenance:
+        fields = dict(
+            source="synthetic",
+            statement_text="forall (n : Nat), 0 < n -> 1 <= n",
+            claim_keywords=(),
+            preconditions=("0 < n",),
+            non_vacuity_witness="decide-checked instance: n = 1",
+            claim_id="claim-1",
+            claim_grade="contract",
+        )
+        fields.update(overrides)
+        return TargetProvenance(**fields)
+
+    def test_vacuity_is_reported_before_missing_control(self):
+        verdict = run_audit(
+            "t", "c", self.provenance(non_vacuity_witness=None), [],
+        )
+        self.assertEqual(verdict.failure_reason, "vacuous-precondition")
+
+    def test_unexercised_hypothesis_is_reported_before_missing_control(self):
+        verdict = run_audit(
+            "t", "c",
+            self.provenance(obligation_evidence=(ObligationHypothesisEvidence(
+                obligation_id="o1", has_precondition=True,
+                states_satisfying=9, states_violating=0, exhaustive=True,
+            ),)),
+            [],
+        )
+        self.assertEqual(verdict.failure_reason, "unexercised-hypothesis")
+
+    def test_name_content_is_reported_before_missing_control(self):
+        verdict = run_audit(
+            "t", "c",
+            self.provenance(
+                # Claims "sorted", constrains only length.
+                statement_text="forall (l : List Nat), 0 < length l -> length (f l) = length l",
+                preconditions=("0 < length l",),
+                claim_keywords=("sorted",),
+            ),
+            [],
+        )
+        self.assertEqual(verdict.failure_reason, "name-content-mismatch")
+
+    def test_scope_is_reported_before_missing_control(self):
+        verdict = run_audit(
+            "t", "c",
+            self.provenance(
+                statement_text="theorem k4_is_planar : Planar K4",
+                preconditions=(), non_vacuity_witness=None,
+                claimed_scope="for every finite graph G, this holds",
+            ),
+            [],
+        )
+        self.assertEqual(verdict.failure_reason, "scope-narrower-than-claimed")
+
+    def test_missing_control_is_reported_once_everything_else_passes(self):
+        verdict = run_audit("t", "c", self.provenance(), [])
+        self.assertEqual(verdict.failure_reason, "missing-control")
+
+    def test_passing_audit_records_all_five_checks_in_order(self):
+        receipts = [evidence_receipt(control=Control(
+            kind="mutation", expectation="red", observed="red", of_claim="claim-1",
+        ))]
+        verdict = run_audit("t", "c", self.provenance(), receipts)
+        self.assertEqual(verdict.verdict, "pass")
+        self.assertEqual(
+            verdict.details["checks_run"],
+            ["vacuity", "unexercised_hypothesis", "name_content", "scope", "controls"],
+        )

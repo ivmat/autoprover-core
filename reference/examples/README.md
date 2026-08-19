@@ -58,44 +58,36 @@ layer then diverges:
 | genuine   | accepted        | pass           | *(null)*                | `accepted` (ratcheted) |
 | vacuous   | accepted        | fail           | `vacuous-precondition`  | `queued` (returned for retry) |
 
-The genuine target's receipt (`genuine.genuine-v1.kernel.json`):
+The genuine target's kernel receipt (`genuine.genuine-v1.kernel.json`) — a
+1.0.0 document, because the example's gate is configured without the
+2.0.0 provenance triple (subject/toolchain/claim_id) and so emits the
+older format explicitly rather than a partly-filled new one:
 
 ```json
 {
-  "schema_version": "1.1.0",
+  "schema_version": "1.0.0",
   "target_id": "genuine",
   "candidate_id": "genuine-v1",
-  "verdict": "pass",
-  "failure_reason": null,
-  "details": {
-    "checks_run": [
-      "vacuity",
-      "unexercised_hypothesis",
-      "name_content",
-      "scope"
-    ],
-    "name_content": {
-      "check": "name_content",
-      "keywords_judged": []
-    },
-    "scope": {
-      "check": "scope",
-      "judged": false,
-      "reason": "no claimed_scope declared"
-    },
-    "unexercised_hypothesis": {
-      "check": "unexercised_hypothesis",
-      "judged": false,
-      "reason": "no enumerated-obligation evidence recorded"
-    },
-    "vacuity": {
-      "check": "vacuity",
-      "preconditions_checked": [
-        "0 < l.length"
-      ]
-    }
+  "checker": {
+    "kind": "kernel",
+    "name": "lean",
+    "version": "Lean (version 4.31.0, x86_64-unknown-linux-gnu, commit 68218e876d2a38b1985b8590fff244a83c321783, Release)"
   },
-  "produced_at": "2026-08-19T07:26:10.017123+00:00"
+  "verdict": "accepted",
+  "certificate": {
+    "checked_file": "/home/ivo/repo/autoprover-core/reference/examples/lean/Genuine.lean",
+    "toolchain_id": "leanprover/lean4:v4.31.0"
+  },
+  "harness": null,
+  "bound": null,
+  "env_assumptions": null,
+  "obligations": [
+    {
+      "id": "genuine",
+      "status": "held"
+    }
+  ],
+  "produced_at": "2026-08-19T08:15:12.109137+00:00"
 }
 ```
 
@@ -104,17 +96,23 @@ and its audit verdict (`genuine.genuine-v1.audit.json`) — `pass`, with
 
 ```json
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.2.0",
   "target_id": "genuine",
   "candidate_id": "genuine-v1",
   "verdict": "pass",
   "failure_reason": null,
   "details": {
-    "checks_run": ["vacuity", "name_content"],
+    "checks_run": ["vacuity", "unexercised_hypothesis", "name_content", "scope", "controls"],
     "vacuity": {"check": "vacuity", "preconditions_checked": ["0 < l.length"]},
-    "name_content": {"check": "name_content", "keywords_judged": []}
+    "unexercised_hypothesis": {
+      "check": "unexercised_hypothesis", "judged": false,
+      "reason": "no enumerated-obligation evidence recorded"
+    },
+    "name_content": {"check": "name_content", "keywords_judged": []},
+    "scope": {"check": "scope", "judged": false, "reason": "no claimed_scope declared"},
+    "controls": {"check": "controls", "judged": false, "reason": "no claim_grade declared"}
   },
-  "produced_at": "2026-08-12T21:23:23.874915+00:00"
+  "produced_at": "2026-08-19T08:15:12.114710+00:00"
 }
 ```
 
@@ -126,7 +124,7 @@ difference becomes a structured, machine-readable fact:
 
 ```json
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.2.0",
   "target_id": "vacuous",
   "candidate_id": "vacuous-v1",
   "verdict": "fail",
@@ -135,7 +133,7 @@ difference becomes a structured, machine-readable fact:
     "check": "vacuity",
     "missing_witness_for": ["l.length < 0"]
   },
-  "produced_at": "2026-08-12T21:23:24.051167+00:00"
+  "produced_at": "2026-08-19T08:15:12.223776+00:00"
 }
 ```
 

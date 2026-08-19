@@ -28,18 +28,29 @@ checks that catch what the kernel structurally cannot see:
       variable pinned to one concrete numeral, a named single-instance
       carrier standing in for "arbitrary X", or no quantified-variable
       binder at all)?
+  (e) missing control — for a claim presented as CONTRACT-grade, does the
+      evidence set gathered under its claim_id contain a control receipt
+      that was watched to fail: a mutation whose prediction was "red" and
+      whose measured observation matched? A check nobody has ever seen
+      fail is untested. A postcondition that is too weak to falsify, or
+      an oracle wired to a value it always computes correctly, passes
+      every ordinary run indistinguishably from a real one; only a
+      deliberately-broken run tells the two apart.
 
-All four checks are HONEST HEURISTICS, not sound verification. They
-operate on provenance metadata, statement *text*, and reported
-enumeration counts, not on formal semantics: "no non-vacuity witness
-recorded" proves the provenance record didn't demonstrate satisfiability,
-not that the precondition truly is unsatisfiable; "no explored state
-violated this precondition" is a fact about the states one run happened
-to enumerate, not a proof that the hypothesis is redundant; "no expected
-keyword found in the statement text" is a lexical check, not a proof that
-the name overclaims; "no quantified binder found" is a syntactic pattern
-match, not a proof the statement is actually about a single instance. A
-target can pass all four checks and
+All five checks are HONEST HEURISTICS, not sound verification. They
+operate on provenance metadata, statement *text*, reported enumeration
+counts, and the shape of an evidence set, not on formal semantics: "no
+non-vacuity witness recorded" proves the provenance record didn't
+demonstrate satisfiability, not that the precondition truly is
+unsatisfiable; "no explored state violated this precondition" is a fact
+about the states one run happened to enumerate, not a proof that the
+hypothesis is redundant; "no expected keyword found in the statement
+text" is a lexical check, not a proof that the name overclaims; "no
+quantified binder found" is a syntactic pattern match, not a proof the
+statement is actually about a single instance; "no observed-red mutation
+control in this evidence set" says the set on offer contains no such
+artifact, not that the oracle is in fact unfalsifiable. A
+target can pass all five checks and
 still be wrong in a way a human would catch immediately, and a target can
 fail one on a false positive (an unusual but legitimate phrasing). This is
 exactly the trade-off ARCHITECTURE.md §7 draws between a kernel verdict
@@ -54,18 +65,29 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Optional, Sequence
 
-from .receipts import AuditVerdict, now_iso
+from .receipts import AuditVerdict, Receipt, now_iso
 
 __all__ = [
+    "CLAIM_GRADES",
     "ObligationHypothesisEvidence",
     "TargetProvenance",
     "check_vacuity",
     "check_unexercised_hypothesis",
     "check_name_content",
     "check_scope",
+    "check_controls",
     "run_audit",
 ]
+
+# What a claim is being presented AS, which decides how much evidence it
+# owes. A "contract" claim is one another party is expected to rely on;
+# a "probe" is exploratory — a measurement taken to learn something, not
+# a promise. Grading is a declaration made by target selection, not
+# something this module infers: nothing in a statement's text says
+# whether anyone is meant to depend on it.
+CLAIM_GRADES = ("contract", "probe")
 
 
 @dataclass(frozen=True)
@@ -129,6 +151,20 @@ class TargetProvenance:
     discharged by enumeration; a target checked by a proof kernel has no
     enumerated state space and therefore records none, which makes
     `check_unexercised_hypothesis` abstain rather than guess.
+
+    `claim_id` is the key this target's evidence is gathered under (the
+    same key receipt schema 2.0.0 records), and `claim_grade` is what the
+    claim is being presented AS: "contract" (another party is expected to
+    rely on it) or "probe" (exploratory — a measurement, not a promise).
+    Both are declarations made by target selection; nothing in a
+    statement's text says whether anyone is meant to depend on it, so
+    this module never infers them. Leaving `claim_grade` unset means "no
+    grade was declared", and `check_controls` abstains — a target nobody
+    called contract-grade is not held to contract-grade evidence. A
+    contract-grade claim MUST carry a claim_id: without one there is no
+    key to gather its evidence under, and a contract claim whose evidence
+    cannot be located would silently escape the check rather than fail
+    it.
     """
 
     source: str
@@ -138,6 +174,21 @@ class TargetProvenance:
     non_vacuity_witness: str | None = None
     claimed_scope: str | None = None
     obligation_evidence: tuple[ObligationHypothesisEvidence, ...] = ()
+    claim_id: str | None = None
+    claim_grade: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.claim_grade is not None and self.claim_grade not in CLAIM_GRADES:
+            raise ValueError(
+                f"claim_grade must be null (undeclared) or one of {CLAIM_GRADES}, "
+                f"got {self.claim_grade!r}"
+            )
+        if self.claim_grade == "contract" and not self.claim_id:
+            raise ValueError(
+                "a contract-grade claim requires a claim_id: it is the key its evidence "
+                "(including its controls) is gathered under, and a contract claim whose "
+                "evidence cannot be located would escape the control check rather than fail it"
+            )
 
 
 # A small, explicit lexicon mapping a claim keyword to substrings whose
@@ -388,12 +439,122 @@ def check_scope(provenance: TargetProvenance) -> tuple[bool, dict]:
     }
 
 
-def run_audit(target_id: str, candidate_id: str, provenance: TargetProvenance) -> AuditVerdict:
-    """Run all four structural checks in order and produce a single
+def check_controls(
+    provenance: TargetProvenance, receipts: Optional[Sequence[Receipt]] = None
+) -> tuple[bool, dict]:
+    """Heuristic (e). For a claim presented as CONTRACT-grade, flags an
+    evidence set that contains no control receipt anyone watched fail:
+    no receipt whose `control` block names this claim, is of kind
+    "mutation", predicted "red", and observed what it predicted.
+
+    A check nobody has ever seen fail is untested. An oracle that reads
+    the value it is supposed to be checking, a postcondition too weak to
+    exclude anything, a fixture that never reaches the interesting path —
+    all of them pass every ordinary run indistinguishably from a real
+    proof. The only artifact that separates them is a deliberately-broken
+    run in which the check DID fire: a mutation whose prediction was red
+    and whose measurement was red.
+
+    Why kind "mutation" specifically, and why expectation "red": those
+    two together are what demonstrate FALSIFIABILITY of this claim's
+    oracle. An ablation attests something adjacent but different (that a
+    precondition is load-bearing), and a control predicted green — the
+    revert leg of a mutation experiment, say — confirms the experiment
+    was reversible without ever showing the oracle can fail. Accepting a
+    green-predicted control here would let a claim satisfy "somebody
+    watched this fail" with evidence that nobody ever did. Controls of
+    other kinds and other predictions are still reported in the details:
+    they are evidence, they are just not evidence OF THIS.
+
+    Three deliberate abstains, each a pass that is not a judgment:
+
+      * `claim_grade` unset — nobody declared this a contract, and a
+        target not presented as one is not held to contract-grade
+        evidence;
+      * `claim_grade == "probe"` — an exploratory measurement makes no
+        promise for anyone to rely on;
+      * `receipts is None` — no evidence set was supplied at all, so
+        there is nothing to look in. Note the distinction from an EMPTY
+        set, which is supplied evidence that happens to contain no
+        control, and does fail: "I have no store to search" and "I
+        searched and there is nothing" are different statements
+        (INTERFACES.md property 3), so they get different encodings.
+
+    Like every check in this module this is a statement about the
+    evidence on offer, not about the world: "no observed-red mutation
+    control in this set" does not prove the oracle is unfalsifiable, only
+    that nothing here shows it isn't.
+    """
+    if provenance.claim_grade != "contract":
+        return True, {
+            "check": "controls",
+            "judged": False,
+            "reason": (
+                "no claim_grade declared" if provenance.claim_grade is None
+                else f"claim_grade is {provenance.claim_grade!r}, not 'contract'"
+            ),
+        }
+
+    if receipts is None:
+        return True, {
+            "check": "controls",
+            "judged": False,
+            "claim_id": provenance.claim_id,
+            "reason": "no receipt set supplied to search for controls",
+        }
+
+    claim_id = provenance.claim_id
+    controls = [r.control for r in receipts if r.control is not None and r.control.of_claim == claim_id]
+    qualifying = [
+        c for c in controls
+        if c.kind == "mutation" and c.expectation == "red" and c.passed()
+    ]
+
+    other_controls = [
+        {
+            "kind": c.kind,
+            "expectation": c.expectation,
+            "observed": c.observed,
+            "behaved_as_predicted": c.passed(),
+        }
+        for c in controls if c not in qualifying
+    ]
+
+    if qualifying:
+        return True, {
+            "check": "controls",
+            "judged": True,
+            "claim_id": claim_id,
+            "observed_red_mutation_controls": len(qualifying),
+            "other_controls": other_controls,
+        }
+
+    return False, {
+        "check": "controls",
+        "judged": True,
+        "claim_id": claim_id,
+        "receipts_searched": len(receipts),
+        "controls_found": len(controls),
+        "observed_red_mutation_controls": 0,
+        "other_controls": other_controls,
+        "required": (
+            "at least one control receipt of kind 'mutation' with expectation 'red' whose "
+            "observation matched — a check nobody watched fail is untested"
+        ),
+    }
+
+
+def run_audit(
+    target_id: str,
+    candidate_id: str,
+    provenance: TargetProvenance,
+    receipts: Optional[Sequence[Receipt]] = None,
+) -> AuditVerdict:
+    """Run all five structural checks in order and produce a single
     structured AuditVerdict. The order is vacuity, then unexercised
-    hypothesis, then name/content, then scope, and the first failing
-    check short-circuits and is reported — never multiple reasons
-    flattened into one ambiguous verdict.
+    hypothesis, then name/content, then scope, then controls, and the
+    first failing check short-circuits and is reported — never multiple
+    reasons flattened into one ambiguous verdict.
 
     Why that order: the two hypothesis checks come first because they ask
     whether the claim has any content at all, and a claim that never
@@ -401,7 +562,17 @@ def run_audit(target_id: str, candidate_id: str, provenance: TargetProvenance) -
     vacuity comes first because "the hypothesis can never hold" is the
     more basic failure than "the hypothesis never failed to hold": a
     target with no non-vacuity witness has nothing for the enumeration
-    counts to be about.
+    counts to be about. Controls come LAST because they are a question
+    about the evidence SET, not about this target's statement: asking
+    "has anyone watched this oracle fail" is only worth answering once
+    the statement itself has survived every check of what it says. A
+    target that overclaims in its name should be reported as
+    overclaiming, not as short of controls.
+
+    `receipts` is the evidence set gathered under this claim, which only
+    the caller can supply — this module owns no store. Passing None (the
+    default) makes `check_controls` abstain; see its docstring for why
+    that differs from passing an empty set.
     """
     vacuity_ok, vacuity_details = check_vacuity(provenance)
     if not vacuity_ok:
@@ -447,17 +618,31 @@ def run_audit(target_id: str, candidate_id: str, provenance: TargetProvenance) -
             produced_at=now_iso(),
         )
 
+    controls_ok, controls_details = check_controls(provenance, receipts)
+    if not controls_ok:
+        return AuditVerdict(
+            target_id=target_id,
+            candidate_id=candidate_id,
+            verdict="fail",
+            failure_reason="missing-control",
+            details=controls_details,
+            produced_at=now_iso(),
+        )
+
     return AuditVerdict(
         target_id=target_id,
         candidate_id=candidate_id,
         verdict="pass",
         failure_reason=None,
         details={
-            "checks_run": ["vacuity", "unexercised_hypothesis", "name_content", "scope"],
+            "checks_run": [
+                "vacuity", "unexercised_hypothesis", "name_content", "scope", "controls",
+            ],
             "vacuity": vacuity_details,
             "unexercised_hypothesis": unexercised_details,
             "name_content": name_content_details,
             "scope": scope_details,
+            "controls": controls_details,
         },
         produced_at=now_iso(),
     )

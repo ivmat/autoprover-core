@@ -38,7 +38,7 @@ executable — see below.
 | `autoprover_ref/receipts.py` | §7 | Receipt/audit-verdict dataclasses, schema validation, atomic writes. |
 | `autoprover_ref/queue.py` | §2 | The evidence-driven target queue state machine. |
 | `autoprover_ref/kernel_gate.py` | §4 | The checker-as-sound-oracle wrapper (pluggable checker command, with a timeout and a tool-failure-vs-property-failure seam). |
-| `autoprover_ref/audit.py` | §5 | The semantic audit layer: vacuity, unexercised-hypothesis, name/content, and scope heuristics. |
+| `autoprover_ref/audit.py` | §5 | The semantic audit layer: vacuity, unexercised-hypothesis, name/content, scope, and missing-control heuristics. |
 | `autoprover_ref/model_checker.py` | §4, §5 | A bounded model checker realizing the exhaustive obligation-level `held`/`vacuous`/`not-exercised`/`failed` bucket, wired in as a `kernel_gate.CheckerCommand`; also reports per-obligation precondition coverage for the audit layer. |
 | `autoprover_ref/ratchet.py` | §6 | The monotone accepted set, explicit removal, dependency recheck. |
 | `autoprover_ref/pipeline.py` | §§2–7 | Glue: drives one target through all of the above. |
@@ -82,7 +82,7 @@ concerns outside a stdlib reference package's scope.
 5. **Explicit schema versioning** — every schema carries
    `schema_version` as a required, validated field, and `receipts.py`
    validates it as part of every read. The receipt format is at 2.0.0
-   and the audit-verdict format at 1.1.0. Writers emit the current
+   and the audit-verdict format at 1.2.0. Writers emit the current
    version; readers accept every published version and dispatch on the
    document's own `schema_version`, so a 1.0.0 receipt on disk still
    validates as 1.0.0 and is never re-read as if it were 2.0.0. Both
@@ -190,12 +190,13 @@ the unexercised hypothesis was flagged.
   from the prover's own claim. This is enforced by *not giving
   `KernelGate.check` any other input to base a verdict on* — there is
   no code path that reads a "prover says this is correct" flag.
-- `audit.py`'s four checks (vacuity, unexercised hypothesis,
-  name/content, and scope) are explicitly documented, in the module
-  docstring and in code comments, as structural heuristics operating on
-  provenance text/metadata and reported enumeration counts — never as
+- `audit.py`'s five checks (vacuity, unexercised hypothesis,
+  name/content, scope, and missing control) are explicitly documented, in
+  the module docstring and in code comments, as structural heuristics
+  operating on provenance text/metadata, reported enumeration counts and
+  the shape of an evidence set — never as
   sound verification. A target can pass all
-  four checks and still be wrong in a way a human would catch
+  five checks and still be wrong in a way a human would catch
   immediately; that trade-off is the one ARCHITECTURE.md §7 draws
   between a kernel verdict (independently re-derivable) and an audit
   verdict (a judgment). The scope check (`audit.check_scope`) in
@@ -316,7 +317,23 @@ recorded here as implemented rather than as gaps:
   notice, so it travels with an audit-schema version bump (1.0.0 →
   1.1.0, INTERFACES.md property 5); 1.0.0 documents still validate and
   are forbidden by the schema from carrying the 1.1.0-only code. The
-  receipt schema is versioned separately and is unchanged at 1.0.0.
+  receipt schema is versioned separately.
+- **`missing-control`** (audit schema 1.2.0) closes the loop the previous
+  four checks leave open. Every one of them judges what a target SAYS —
+  whether its hypothesis can fire, whether it ever failed to, whether its
+  name is reflected in its statement, whether its scope is as broad as
+  claimed. None of them can tell a real proof from one whose oracle is
+  too weak to fail: a postcondition that excludes nothing passes every
+  ordinary run indistinguishably from one that excludes the right things.
+  The only artifact that separates them is a run in which the check DID
+  fire. `audit.check_controls` requires a claim presented as
+  contract-grade (`TargetProvenance.claim_grade == "contract"`) to carry,
+  in the evidence set gathered under its `claim_id`, a control receipt of
+  kind `mutation` that was predicted `red` and observed `red` — a check
+  somebody watched fail. It abstains for probe-grade or ungraded claims
+  and when no evidence set is supplied at all, and it runs LAST, because
+  a question about the evidence set is worth asking only once every
+  question about the statement itself has been answered.
 - **`scope-narrower-than-claimed`** was schema-defined but not
   implemented — this reference package originally shipped only the two
   checks the initial task specified (vacuity, name/content) and left this
