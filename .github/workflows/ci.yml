@@ -1,0 +1,49 @@
+name: CI
+
+# Two claims this repository makes that a reader should not have to take on
+# the author's word: the corpus is kernel-green under its pinned toolchain,
+# and the reference implementation's test suite passes on stock Python.
+# This workflow checks both on every push and pull request.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    name: corpus — lake build (Lean kernel)
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout v5, pinned by commit SHA
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      # leanprover/lean-action v1.5.0, pinned by commit SHA. It installs elan
+      # and honours corpus/lean-toolchain, so the toolchain CI uses is the one
+      # the repository pins — not whatever is newest.
+      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
+        with:
+          lake-package-directory: corpus
+          auto-config: "false"
+          build: "true"
+          test: "false"
+          lint: "false"
+          use-mathlib-cache: "false"
+
+  reference:
+    name: reference — run_tests.py (stock Python)
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout v5, pinned by commit SHA
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      # No setup-python step on purpose: the reference implementation depends
+      # on nothing outside the standard library, and running it against the
+      # runner's stock python3 is part of what is being checked.
+      - name: python version
+        run: python3 --version
+      - name: run the test suite
+        run: python3 run_tests.py
+        working-directory: reference
