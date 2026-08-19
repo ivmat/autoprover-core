@@ -62,20 +62,40 @@ The genuine target's receipt (`genuine.genuine-v1.kernel.json`):
 
 ```json
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "target_id": "genuine",
   "candidate_id": "genuine-v1",
-  "checker": {"kind": "kernel", "name": "lean", "version": "Lean (version 4.31.0, ...)"},
-  "verdict": "accepted",
-  "certificate": {
-    "checked_file": ".../reference/examples/lean/Genuine.lean",
-    "toolchain_id": "leanprover/lean4:v4.31.0"
+  "verdict": "pass",
+  "failure_reason": null,
+  "details": {
+    "checks_run": [
+      "vacuity",
+      "unexercised_hypothesis",
+      "name_content",
+      "scope"
+    ],
+    "name_content": {
+      "check": "name_content",
+      "keywords_judged": []
+    },
+    "scope": {
+      "check": "scope",
+      "judged": false,
+      "reason": "no claimed_scope declared"
+    },
+    "unexercised_hypothesis": {
+      "check": "unexercised_hypothesis",
+      "judged": false,
+      "reason": "no enumerated-obligation evidence recorded"
+    },
+    "vacuity": {
+      "check": "vacuity",
+      "preconditions_checked": [
+        "0 < l.length"
+      ]
+    }
   },
-  "harness": null,
-  "bound": null,
-  "env_assumptions": null,
-  "obligations": [{"id": "genuine", "status": "held"}],
-  "produced_at": "2026-08-12T21:23:23.873682+00:00"
+  "produced_at": "2026-08-19T07:26:10.017123+00:00"
 }
 ```
 

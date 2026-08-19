@@ -266,7 +266,7 @@ def check_unexercised_hypothesis(provenance: TargetProvenance) -> tuple[bool, di
 
 
 def check_name_content(provenance: TargetProvenance) -> tuple[bool, dict]:
-    """Heuristic (b). For each declared claim keyword with a judgeable
+    """Heuristic (c). For each declared claim keyword with a judgeable
     entry in `CLAIM_KEYWORD_SIGNALS`, flags a mismatch if none of its
     expected signal substrings appear (case-insensitively) in the
     statement text. Keywords not in the lexicon are skipped (the
@@ -324,7 +324,7 @@ _SINGLE_CARRIER_SIGNALS: tuple[str, ...] = (
 
 
 def check_scope(provenance: TargetProvenance) -> tuple[bool, dict]:
-    """Heuristic (c). Flags a target whose `claimed_scope` asserts
+    """Heuristic (d). Flags a target whose `claimed_scope` asserts
     generality but whose formal statement text shows structural evidence
     of being restricted to a fixed instance: a would-be-universal
     variable pinned to one concrete numeral, a named single-instance
