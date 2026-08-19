@@ -42,7 +42,8 @@ executable — see below.
 | `autoprover_ref/model_checker.py` | §4, §5 | A bounded model checker realizing the exhaustive obligation-level `held`/`vacuous`/`not-exercised`/`failed` bucket, wired in as a `kernel_gate.CheckerCommand`; also reports per-obligation precondition coverage for the audit layer. |
 | `autoprover_ref/ratchet.py` | §6 | The monotone accepted set, explicit removal, dependency recheck. |
 | `autoprover_ref/pipeline.py` | §§2–7 | Glue: drives one target through all of the above. |
-| `autoprover_ref/jsonschema_min.py` | — | The hand-rolled JSON Schema validator subset the two schemas use. |
+| `autoprover_ref/adapters/kani.py` | §4, §7 | Adapter: parses a bounded-model-checker run log into one 2.0.0 receipt per harness, cross-checking the run's own harness counts and reporting every line it cannot classify. |
+| `autoprover_ref/jsonschema_min.py` | — | The hand-rolled JSON Schema validator subset the schemas use. |
 
 §1 (target selection and decomposition) and §3 (LLM provers) are
 represented as *contracts* rather than components: `queue.TargetEntry`
