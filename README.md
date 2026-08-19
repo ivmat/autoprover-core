@@ -20,6 +20,8 @@ implementation of that pipeline.
   what the proofs do and do not establish ([LIMITATIONS.md](docs/LIMITATIONS.md)),
   the assumptions the whole apparatus stands on and what would falsify each
   ([ASSUMPTIONS.md](docs/ASSUMPTIONS.md)),
+  the public derivation of the control-receipt machinery
+  ([PROVENANCE.md](docs/PROVENANCE.md)),
   and how the pieces fit together and how to add one
   ([EXTENDING.md](docs/EXTENDING.md)).
 - `reference/` — a dependency-free Python reference implementation of the
