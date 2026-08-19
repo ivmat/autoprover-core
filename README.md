@@ -18,6 +18,8 @@ implementation of that pipeline.
   ([ARCHITECTURE.md](docs/ARCHITECTURE.md)), the interface discipline it
   depends on ([INTERFACES.md](docs/INTERFACES.md)), the honest scope of
   what the proofs do and do not establish ([LIMITATIONS.md](docs/LIMITATIONS.md)),
+  the assumptions the whole apparatus stands on and what would falsify each
+  ([ASSUMPTIONS.md](docs/ASSUMPTIONS.md)),
   and how the pieces fit together and how to add one
   ([EXTENDING.md](docs/EXTENDING.md)).
 - `reference/` — a dependency-free Python reference implementation of the

@@ -80,6 +80,12 @@ a bug in the kernel or a mismatch in toolchain version is outside what any
 proof here can attest to. Toolchains are pinned per package precisely so
 that "checked" names a specific, reproducible checker.
 
+The hypotheses above are the local half of this. The standing assumptions
+the whole apparatus rests on — kernel soundness, toolchain semantics,
+receipt authenticity, and the fact that no such list can ever be complete —
+are enumerated, each with what would falsify it, in
+[ASSUMPTIONS.md](ASSUMPTIONS.md).
+
 ## 6. Finite and bounded by construction
 
 This corpus is written in **core Lean 4 with no external libraries** (no
