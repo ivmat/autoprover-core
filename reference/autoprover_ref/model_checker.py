@@ -67,6 +67,7 @@ from typing import Callable, Hashable, Iterable, Optional, Sequence
 
 from .audit import ObligationHypothesisEvidence
 from .kernel_gate import CheckerCommand, CheckerResult
+from .receipts import Coverage
 
 __all__ = [
     "TransitionSystem",
@@ -307,11 +308,33 @@ def model_checker_command(
     `obligations` array) for a caller to act on directly.
     """
 
-    def run(_candidate_file: Path) -> CheckerResult:
+    def run(_candidate_file: Path, _timeout: Optional[float] = None) -> CheckerResult:
         exploration = explore(system, bound)
         checked = check_obligations(exploration, obligations)
         statuses = {r.id: r.status for r in checked}
         any_failed = any(r.status == "failed" for r in checked)
+        # The hypothesis coverage this run measured travels WITH the
+        # result, so it reaches the receipt (schema 2.0.0) and from there
+        # the semantic audit. Before that field existed, a checker could
+        # measure coverage and had nowhere to put it, and the audit's
+        # unexercised-hypothesis check abstained for want of the very
+        # numbers the checker had just computed. An obligation with no
+        # precondition gets no coverage record rather than a zeroed one:
+        # it has no hypothesis to cover, which is not the same as a
+        # hypothesis nothing exercised.
+        coverage = {
+            record.obligation_id: Coverage(
+                states_satisfying=record.states_satisfying,
+                states_violating=record.states_violating,
+                exhaustive=record.exhaustive,
+            )
+            for record in hypothesis_coverage(exploration, obligations)
+            if record.has_precondition
+        }
+        # This checker's exploration is bounded by `bound`, not by wall
+        # clock, so there is no timeout to honour — it is accepted for
+        # seam compatibility and ignored, exactly as the candidate file
+        # path is.
         return CheckerResult(
             accepted=not any_failed,
             exit_code=1 if any_failed else 0,
@@ -320,6 +343,7 @@ def model_checker_command(
                 f"{system.name!r} (exhaustive={exploration.exhaustive})"
             ),
             obligation_statuses=statuses,
+            obligation_coverage=coverage,
         )
 
     return run

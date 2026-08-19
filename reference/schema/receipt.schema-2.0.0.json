@@ -1,0 +1,287 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://autoprover-core.example/schema/receipt.schema-2.0.0.json",
+  "title": "Verification Receipt 2.0.0",
+  "schemaVersion": "2.0.0",
+  "description": "A structured, machine-readable result of running one candidate through one checker (ARCHITECTURE.md §4 kernel gate, §7 receipts). Version history: 1.0.0 is the original format, shipped as receipt.schema.json and still valid for documents that declare it; 2.0.0 is a BREAKING change (new required objects) and therefore ships as its own schema file rather than widening the old one — a 1.0.0 reader meeting a 2.0.0 document would find fields it cannot interpret, and a 1.0.0 document may not carry them (INTERFACES.md property 5). What 2.0.0 adds over 1.0.0: `toolchain` (build identity at commit granularity plus the semantics in force — a receipt whose verdict cannot be attributed to an exact build is not evidence), `subject` (which repository/commit/unit the verdict is about, so receipts from several subjects can share one store), `claim_id` (the aggregation key: many per-unit receipts, one claim), `failure_kind` (makes verdict 'error' reachable AND self-describing — a timeout or an unsupported construct must never be readable as a property failure), a per-obligation `coverage` block (so hypothesis-coverage evidence travels with the receipt instead of being lost between checker and audit), and an optional `control` block (a receipt that attests an oracle's or precondition's validity for another claim: an ablation, a mutation, or a planted twin). Every field is present even when its value is 'not applicable' — absence must never be read as a guess (INTERFACES.md property 3).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "target_id",
+    "candidate_id",
+    "claim_id",
+    "subject",
+    "toolchain",
+    "checker",
+    "verdict",
+    "failure_kind",
+    "certificate",
+    "harness",
+    "bound",
+    "env_assumptions",
+    "obligations",
+    "control",
+    "produced_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "2.0.0",
+      "description": "Explicit schema version (INTERFACES.md property 5). A document declaring any other version is not validated against this schema at all; the loader dispatches on this field."
+    },
+    "target_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The target this receipt is a verdict about."
+    },
+    "candidate_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The specific candidate artifact that was checked."
+    },
+    "claim_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The aggregation key under which this receipt is evidence. One claim (a manifest clause, say) is typically discharged by MANY receipts — one per harness, per unit, per checker family — and this field is what joins them. It is not the target id: several targets can serve one claim, and one target can be re-checked under several claims."
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo", "commit", "unit"],
+      "description": "What the verdict is ABOUT, at commit granularity. Without this a receipt store cannot hold two subjects at once, and a verdict cannot be re-attached to the source state it was measured on.",
+      "properties": {
+        "repo": {"type": "string", "minLength": 1, "description": "Identifier of the repository/source tree the checked code lives in."},
+        "commit": {"type": "string", "minLength": 1, "description": "The exact commit of that tree the verdict was measured on."},
+        "unit": {
+          "type": ["string", "null"],
+          "description": "Nullable. The sub-unit (module, crate, package, file) within the subject, or null meaning explicitly 'the whole subject at that commit, not a sub-unit' — never 'unknown'."
+        }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "dependencies", "flags", "features"],
+      "description": "Build identity at commit granularity plus the semantics in force. A verifier's verdict is relative to the exact build that produced it and to the flags/features that were enabled: a version string alone cannot distinguish two builds of the same release, and a flag that changes which semantics the tool applies changes what the verdict MEANS. Recording only `checker.version` (as 1.0.0 did) makes a verdict unattributable and therefore unreproducible.",
+      "properties": {
+        "tool": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "commit_or_version"],
+          "properties": {
+            "name": {"type": "string", "minLength": 1},
+            "commit_or_version": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The exact build identity: a commit hash where one exists, otherwise a release version. One field on purpose — 'which build was this' has one answer, and splitting it invites recording the release while omitting the build."
+            }
+          }
+        },
+        "dependencies": {
+          "type": "array",
+          "description": "Every other component whose version can change the verdict (solver, backend, standard library). May be empty — an empty list means 'no version-bearing dependency was recorded as verdict-relevant', which is a statement, not an absence.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "version"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "version": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "flags": {
+          "type": "array",
+          "description": "The invocation flags in force, verbatim. These are part of the verdict's meaning, not diagnostics: a flag that switches an unstable semantics on or off changes what was proved.",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "features": {
+          "type": ["array", "null"],
+          "description": "Nullable, and the two values mean different things: an ARRAY (possibly empty) means the tool has a feature-selection concept and exactly these were enabled; NULL means the tool has no such concept at all. Neither ever means 'not recorded' (INTERFACES.md property 3).",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "checker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "version"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["kernel", "model-checker"],
+          "description": "Which family of sound oracle produced this verdict. A proof kernel and a bounded model checker are not interchangeable (ARCHITECTURE.md §4) — this field is what the conditional rules below key off of."
+        },
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1}
+      }
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["accepted", "rejected", "error"],
+      "description": "'error' is distinct from 'rejected': it means the checker itself failed to produce a verdict (timeout, out-of-memory, a construct it does not support, an internal failure) — never coerced into a guessed accept/reject, and never routed as if a property had been refuted. In 2.0.0 an 'error' verdict must say which kind (see failure_kind), so a scheduler can tell 'retry me bigger' from 'this clause is out of scope for this tool'."
+    },
+    "failure_kind": {
+      "type": ["string", "null"],
+      "enum": ["timeout", "oom", "unsupported-construct", "tool-error", null],
+      "description": "Nullable. Non-null exactly when verdict == 'error'. 'unsupported-construct' is specifically NOT a red: it says the tool declined to reason about something, which is a scope fact about the tool, not a fact about the code."
+    },
+    "certificate": {
+      "description": "Nullable. Present iff checker.kind == 'kernel' AND verdict == 'accepted'. A re-runnable reference (checked file + toolchain), never a log line saying 'passed'.",
+      "type": ["object", "null"],
+      "properties": {
+        "checked_file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path to the exact file the checker consumed."
+        },
+        "toolchain_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the exact checker toolchain used, so the check can be re-run identically."
+        }
+      },
+      "additionalProperties": false,
+      "required": ["checked_file", "toolchain_id"]
+    },
+    "harness": {
+      "type": ["string", "null"],
+      "description": "Nullable. Required (non-null) iff checker.kind == 'model-checker'; forbidden (must be null) for checker.kind == 'kernel'. Identifies the harness the bound-checked verdict is relative to."
+    },
+    "bound": {
+      "type": ["string", "number", "null"],
+      "description": "Nullable. Required (non-null) iff checker.kind == 'model-checker'; forbidden (must be null) for checker.kind == 'kernel'. The state-space bound the verdict is relative to."
+    },
+    "env_assumptions": {
+      "type": ["string", "null"],
+      "description": "Nullable. Required (non-null) iff checker.kind == 'model-checker'; forbidden (must be null) for checker.kind == 'kernel'. The environment assumptions encoded in the harness."
+    },
+    "obligations": {
+      "type": "array",
+      "description": "Exhaustive account of every obligation the checker was asked about, including the ones never meaningfully exercised (INTERFACES.md property 2). Never just the list of what passed.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "coverage"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "status": {
+            "type": "string",
+            "enum": ["held", "vacuous", "not-exercised", "failed"],
+            "description": "'vacuous' and 'not-exercised' are first-class, distinct from 'held' — an obligation that was never really tested must never look identical to one that held (INTERFACES.md property 2)."
+          },
+          "coverage": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["states_satisfying", "states_violating", "exhaustive"],
+            "description": "Nullable. What an enumerating checker measured about this obligation's precondition: how many explored states satisfied it, how many violated it, and whether the exploration was exhaustive. Null means the checker reported no coverage for this obligation (a proof kernel enumerates nothing), never 'coverage was fine'. Carrying it HERE is what lets the semantic audit judge hypothesis coverage on receipt evidence instead of abstaining for want of it.",
+            "properties": {
+              "states_satisfying": {"type": "integer"},
+              "states_violating": {"type": "integer"},
+              "exhaustive": {
+                "type": "boolean",
+                "description": "True iff the counts range over the whole reachable set rather than a bound-truncated slice of it. It changes what the counts MEAN, so it travels with them."
+              }
+            }
+          }
+        }
+      }
+    },
+    "control": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["kind", "expectation", "observed", "of_claim"],
+      "description": "Nullable. Present iff this receipt is a CONTROL: a run whose purpose is to attest that some other claim's oracle or precondition is load-bearing, rather than to establish that claim. Null means 'this is an ordinary evidence receipt', never 'no control was needed'. A check nobody has watched fail is untested; a control receipt is the artifact that records having watched it.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["ablation", "mutation", "planted-twin"],
+          "description": "'ablation' removes a precondition/hypothesis and expects the property to break (showing the precondition was load-bearing); 'mutation' perturbs the implementation and expects the oracle to catch it (showing the postcondition is falsifiable); 'planted-twin' checks a deliberately-wrong sibling artifact and expects it to be rejected (showing the pipeline can reject at all)."
+        },
+        "expectation": {
+          "type": "string",
+          "enum": ["red", "green", "sat"],
+          "description": "What this control was PREDICTED to show, declared before the run: 'red' the run fails, 'green' the run still passes, 'sat' the cover/reachability obligation is satisfiable. Declared, closed, and recorded so a control cannot be reinterpreted after the fact to match whatever happened."
+        },
+        "observed": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the run actually showed, as measured — deliberately NOT restricted to the expectation enum, because a control can land outside its own vocabulary (it errored, no cover existed). A control counts as passing only when this equals `expectation`; anything else, including an unrecognized value, is a failed control."
+        },
+        "of_claim": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The claim_id this control attests. It is an explicit pointer, never inferred from context — a control run recorded under its own campaign's claim_id still says here which claim it is evidence ABOUT."
+        }
+      }
+    },
+    "produced_at": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ISO-8601 timestamp of when this receipt was produced."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "checker": {"properties": {"kind": {"const": "kernel"}}}
+        }
+      },
+      "then": {
+        "properties": {
+          "harness": {"const": null},
+          "bound": {"const": null},
+          "env_assumptions": {"const": null}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checker": {"properties": {"kind": {"const": "model-checker"}}}
+        }
+      },
+      "then": {
+        "required": ["harness", "bound", "env_assumptions"],
+        "properties": {
+          "harness": {"type": "string", "minLength": 1},
+          "bound": {"type": ["string", "number"]},
+          "env_assumptions": {"type": "string", "minLength": 1},
+          "certificate": {"const": null}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checker": {"properties": {"kind": {"const": "kernel"}}},
+          "verdict": {"const": "accepted"}
+        }
+      },
+      "then": {
+        "required": ["certificate"],
+        "properties": {"certificate": {"type": "object"}}
+      },
+      "else": {
+        "properties": {"certificate": {"const": null}}
+      }
+    },
+    {
+      "if": {"properties": {"verdict": {"const": "error"}}},
+      "then": {
+        "properties": {
+          "failure_kind": {
+            "type": "string",
+            "enum": ["timeout", "oom", "unsupported-construct", "tool-error"],
+            "description": "An 'error' verdict that does not say what kind of error is exactly the ambiguity this field exists to remove."
+          }
+        }
+      },
+      "else": {
+        "properties": {"failure_kind": {"const": null}}
+      }
+    }
+  ]
+}

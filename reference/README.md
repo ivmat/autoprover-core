@@ -32,11 +32,12 @@ executable — see below.
 
 | path | ARCHITECTURE.md section | what it is |
 |---|---|---|
-| `schema/receipt.schema.json` | §4, §7 | The versioned contract for a verification receipt. |
+| `schema/receipt.schema.json` | §4, §7 | The verification-receipt contract, version 1.0.0 (kept at its published path; still valid for documents that declare it). |
+| `schema/receipt.schema-2.0.0.json` | §4, §7 | The current verification-receipt contract: 1.0.0 plus `toolchain` / `subject` / `claim_id` provenance, a self-describing `error` verdict (`failure_kind`), per-obligation `coverage`, and the optional `control` block. |
 | `schema/audit.schema.json` | §5, §7 | The versioned contract for a semantic audit verdict. |
 | `autoprover_ref/receipts.py` | §7 | Receipt/audit-verdict dataclasses, schema validation, atomic writes. |
 | `autoprover_ref/queue.py` | §2 | The evidence-driven target queue state machine. |
-| `autoprover_ref/kernel_gate.py` | §4 | The checker-as-sound-oracle wrapper (pluggable checker command). |
+| `autoprover_ref/kernel_gate.py` | §4 | The checker-as-sound-oracle wrapper (pluggable checker command, with a timeout and a tool-failure-vs-property-failure seam). |
 | `autoprover_ref/audit.py` | §5 | The semantic audit layer: vacuity, unexercised-hypothesis, name/content, and scope heuristics. |
 | `autoprover_ref/model_checker.py` | §4, §5 | A bounded model checker realizing the exhaustive obligation-level `held`/`vacuous`/`not-exercised`/`failed` bucket, wired in as a `kernel_gate.CheckerCommand`; also reports per-obligation precondition coverage for the audit layer. |
 | `autoprover_ref/ratchet.py` | §6 | The monotone accepted set, explicit removal, dependency recheck. |
@@ -66,17 +67,28 @@ concerns outside a stdlib reference package's scope.
    `vacuous` vs. `not-exercised` from whether its exploration was
    exhaustive or bound-truncated — see "The model checker" below.
 3. **Null never means a guess** — `certificate`, `harness`, `bound`,
-   `env_assumptions`, and `failure_reason` are explicit, schema-checked
-   nullable fields; the schemas enforce exactly when each may/must be
-   null (see the `allOf`/`if`/`then`/`else` blocks in both schema
-   files).
+   `env_assumptions`, `failure_kind`, `control`, per-obligation
+   `coverage`, `subject.unit` and `toolchain.features` are explicit,
+   schema-checked nullable fields; the schemas enforce exactly when each
+   may/must be null (see the `allOf`/`if`/`then`/`else` blocks in the
+   schema files). Where two nulls would mean different things they are
+   given different encodings instead: `toolchain.features: null` means
+   the tool has no feature-selection concept, `[]` means it has one and
+   none were enabled.
 4. **Atomic, exists-implies-complete writes** — `receipts.atomic_write_json`
    writes to a temp file in the target directory, `fsync`s, then
    `os.replace`s; a file that exists at the expected path is always the
    finished artifact.
-5. **Explicit schema versioning** — both schemas carry `schema_version`
-   as a required, validated field (`"1.0.0"` today); `receipts.py`
-   validates it as part of every read.
+5. **Explicit schema versioning** — every schema carries
+   `schema_version` as a required, validated field, and `receipts.py`
+   validates it as part of every read. The receipt format is at 2.0.0
+   and the audit-verdict format at 1.1.0. Writers emit the current
+   version; readers accept every published version and dispatch on the
+   document's own `schema_version`, so a 1.0.0 receipt on disk still
+   validates as 1.0.0 and is never re-read as if it were 2.0.0. Both
+   directions are enforced and tested: an old document may not carry a
+   field or code its own version never defined, and a new one may not
+   omit what its version requires.
 
 ## Running the tests
 
@@ -244,8 +256,35 @@ over:
    state's name is a holdover from the diagram, not a restriction" would
    close that gap.
 
-Two earlier divergences in this list have since been closed, and are
+Three earlier divergences in this list have since been closed, and are
 recorded here as implemented rather than as gaps:
+
+- **Provenance, a reachable `error` verdict, coverage on the receipt, and
+  control receipts** were all absent from receipt schema 1.0.0, and each
+  absence had a consequence. A verdict recorded only `checker.version`,
+  which cannot distinguish two builds of one release and cannot record
+  which semantics flags were in force, so a verdict could not be
+  attributed to a build and therefore could not be reproduced. There was
+  no `claim_id`, so per-harness receipts could not be aggregated under
+  one claim. `verdict: "error"` was in the enum but unreachable in code:
+  a checker that timed out or met a construct it could not model was
+  reported as `rejected`, i.e. as if the candidate had been refuted.
+  `CheckerResult` could not carry hypothesis coverage, so the
+  unexercised-hypothesis audit check abstained on everything driven
+  through `Pipeline` — the numbers the model checker had just computed
+  were dropped between the checker and the audit. And an ablation or
+  mutation run — the evidence that an oracle or a precondition is
+  load-bearing at all — had no representation. Receipt schema **2.0.0**
+  closes all five: `toolchain` (tool build identity, dependency
+  versions, flags, features) and `subject` (repo, commit, unit),
+  `claim_id`, `failure_kind` (`timeout` / `oom` /
+  `unsupported-construct` / `tool-error`, non-null exactly when the
+  verdict is `error`), a per-obligation `coverage` block, and an
+  optional `control` block (`ablation` / `mutation` / `planted-twin`
+  with a declared expectation and a measured observation). The checker
+  seam gained a timeout to match, and `KernelGate` maps any reported
+  `failure_kind` to `error` with the kind recorded rather than to
+  `rejected`.
 
 - **Obligation-level vacuity/not-exercised detection**, at the time this
   note was first written, was not implemented anywhere in the pipeline:

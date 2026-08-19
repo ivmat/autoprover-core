@@ -33,6 +33,7 @@ from autoprover_ref.model_checker import (
 )
 from autoprover_ref.pipeline import Pipeline
 from autoprover_ref.queue import State, TargetQueue
+from autoprover_ref.receipts import Subject, Tool, Toolchain, validate_receipt_dict
 from autoprover_ref.ratchet import Ratchet
 
 from _tmpdir import TempDirCase
@@ -429,3 +430,62 @@ class CoverageFeedsTheAuditLayerTests(unittest.TestCase):
         [status] = [r for r in check_obligations(
             explore(traffic_light_system(buggy=True), bound=10), [NOT_STUCK_OBLIGATION])]
         self.assertEqual(status.status, "held")
+
+
+class CoverageReachesTheReceiptTests(unittest.TestCase):
+    """Receipt 2.0.0 closes the gap where a checker measured hypothesis
+    coverage and had nowhere to put it: the numbers now ride from the
+    exploration, through the CheckerResult, onto the receipt, where the
+    semantic audit can read them instead of abstaining for want of them."""
+
+    def _v2_gate(self, system, obligations, bound) -> KernelGate:
+        return KernelGate(
+            checker_command=model_checker_command(system, obligations, bound),
+            checker_name="toy-bounded-checker",
+            checker_version="0.1.0",
+            kind="model-checker",
+            toolchain_id="toy-bounded-checker-toolchain",
+            subject=Subject(repo="example/toy", commit="0" * 40, unit="traffic_light"),
+            toolchain=Toolchain(
+                tool=Tool(name="toy-bounded-checker", commit_or_version="0.1.0"),
+                dependencies=(),
+                flags=("--bound=10",),
+                features=None,
+            ),
+            claim_id="claim-traffic-light",
+        )
+
+    def test_receipt_carries_the_measured_coverage_per_obligation(self):
+        obligations = [NOT_STUCK_OBLIGATION]
+        gate = self._v2_gate(traffic_light_system(), obligations, bound=10)
+        receipt = gate.check(
+            target_id="not_stuck_implies_cycling", candidate_id="cand1",
+            candidate_file="ignored.model",
+            obligation_ids=[o.id for o in obligations],
+            harness="bounded_bfs(traffic_light)", bound=10,
+            env_assumptions="single traffic light, no external resets",
+        )
+        validate_receipt_dict(receipt.to_dict())
+        [obligation] = receipt.obligations
+        self.assertIsNotNone(obligation.coverage)
+        # The guard pruned nothing in the correct system - which is
+        # exactly what the audit's unexercised-hypothesis check flags,
+        # and now it can see it from the receipt alone.
+        self.assertEqual(obligation.coverage.states_violating, 0)
+        self.assertGreater(obligation.coverage.states_satisfying, 0)
+        self.assertTrue(obligation.coverage.exhaustive)
+
+    def test_unconditional_obligation_gets_no_coverage_record(self):
+        # No hypothesis to cover is not the same as a hypothesis nothing
+        # exercised, so the record is absent rather than zeroed.
+        unconditional = [o for o in TRAFFIC_LIGHT_OBLIGATIONS if o.precondition is None]
+        self.assertTrue(unconditional)
+        gate = self._v2_gate(traffic_light_system(), unconditional, bound=10)
+        receipt = gate.check(
+            target_id=unconditional[0].id, candidate_id="cand1",
+            candidate_file="ignored.model",
+            obligation_ids=[o.id for o in unconditional],
+            harness="bounded_bfs(traffic_light)", bound=10,
+            env_assumptions="single traffic light, no external resets",
+        )
+        self.assertTrue(all(o.coverage is None for o in receipt.obligations))

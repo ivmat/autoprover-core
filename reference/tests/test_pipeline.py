@@ -17,11 +17,11 @@ from autoprover_ref.ratchet import Ratchet
 from _tmpdir import TempDirCase
 
 
-def fake_accepting_checker(_path: Path) -> CheckerResult:
+def fake_accepting_checker(_path: Path, _timeout=None) -> CheckerResult:
     return CheckerResult(accepted=True, exit_code=0)
 
 
-def fake_rejecting_checker(_path: Path) -> CheckerResult:
+def fake_rejecting_checker(_path: Path, _timeout=None) -> CheckerResult:
     return CheckerResult(accepted=False, exit_code=1)
 
 

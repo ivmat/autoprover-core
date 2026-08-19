@@ -43,6 +43,10 @@ def kernel_receipt(target_id, candidate_id, verdict="accepted"):
         harness=None, bound=None, env_assumptions=None,
         obligations=(Obligation(id=target_id, status="held" if verdict == "accepted" else "failed"),),
         produced_at=now_iso(),
+        # These fixtures exercise the queue/ratchet, not the receipt
+        # format; they stay on 1.0.0 so the older format keeps being
+        # driven end-to-end through both components.
+        schema_version="1.0.0",
     )
 
 

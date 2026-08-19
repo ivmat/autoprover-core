@@ -28,6 +28,7 @@ def accepted_receipt(target_id="t1", candidate_id="c1"):
         harness=None, bound=None, env_assumptions=None,
         obligations=(Obligation(id=target_id, status="held"),),
         produced_at=now_iso(),
+        schema_version="1.0.0",
     )
 
 
@@ -39,6 +40,7 @@ def rejected_receipt(target_id="t1", candidate_id="c1"):
         harness=None, bound=None, env_assumptions=None,
         obligations=(Obligation(id=target_id, status="failed"),),
         produced_at=now_iso(),
+        schema_version="1.0.0",
     )
 
 
