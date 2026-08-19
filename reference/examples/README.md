@@ -61,7 +61,10 @@ layer then diverges:
 The genuine target's kernel receipt (`genuine.genuine-v1.kernel.json`) — a
 1.0.0 document, because the example's gate is configured without the
 2.0.0 provenance triple (subject/toolchain/claim_id) and so emits the
-older format explicitly rather than a partly-filled new one:
+older format explicitly rather than a partly-filled new one.
+`certificate.checked_file` is the absolute path the checker actually
+consumed, elided here as `<ABSOLUTE PATH>` since it depends on where you
+cloned this repository:
 
 ```json
 {
@@ -75,7 +78,7 @@ older format explicitly rather than a partly-filled new one:
   },
   "verdict": "accepted",
   "certificate": {
-    "checked_file": "/home/ivo/repo/autoprover-core/reference/examples/lean/Genuine.lean",
+    "checked_file": "<ABSOLUTE PATH>/reference/examples/lean/Genuine.lean",
     "toolchain_id": "leanprover/lean4:v4.31.0"
   },
   "harness": null,
