@@ -500,6 +500,72 @@ class MissingControlTests(unittest.TestCase):
         self.assertEqual(verdict.failure_reason, "missing-control")
         self.assertEqual(verdict.details["controls_found"], 0)
 
+    @staticmethod
+    def accepted_receipt_carrying(control: Control) -> Receipt:
+        """A receipt whose own verdict is `accepted` while its control
+        block claims the run was observed RED. Nobody watched this
+        oracle fail: the two halves of the same artifact contradict
+        each other."""
+        return Receipt(
+            target_id="t",
+            candidate_id="cand1",
+            checker=Checker(kind="model-checker", name="checker-x", version="0.1.0"),
+            verdict="accepted",
+            certificate=None,
+            harness="harness_x",
+            bound=8,
+            env_assumptions="synthetic",
+            obligations=(Obligation(id="t", status="held"),),
+            produced_at=now_iso(),
+            claim_id="claim-1",
+            subject=Subject(repo="example/subject", commit="0" * 40, unit=None),
+            toolchain=Toolchain(
+                tool=Tool(name="checker-x", commit_or_version="0" * 40),
+                dependencies=(), flags=(), features=None,
+            ),
+            control=control,
+        )
+
+    def test_a_red_control_on_an_accepted_receipt_never_qualifies(self):
+        # The control block says "observed: red"; the receipt carrying it
+        # says the run was accepted. A control block is metadata a caller
+        # writes - it is the CHECKER's verdict that says whether anything
+        # actually went red.
+        receipts = [self.accepted_receipt_carrying(self.mutation())]
+        verdict = run_audit("t", "c", self.contract_provenance(), receipts)
+        self.assertEqual(verdict.verdict, "fail")
+        self.assertEqual(verdict.failure_reason, "missing-control")
+        self.assertEqual(verdict.details["observed_red_mutation_controls"], 0)
+        self.assertEqual(len(verdict.details["contradictions"]), 1)
+        self.assertEqual(
+            verdict.details["contradictions"][0]["carrying_receipt_verdict"], "accepted",
+        )
+
+    def test_a_contradictory_twin_is_reported_alongside_a_genuine_control(self):
+        # Two byte-identical control blocks, one on a rejected receipt
+        # (genuine) and one on an accepted receipt (contradictory). The
+        # genuine one qualifies; the contradictory one must still be
+        # reported, not silently folded into its twin.
+        receipts = [
+            evidence_receipt(control=self.mutation()),
+            self.accepted_receipt_carrying(self.mutation()),
+        ]
+        verdict = run_audit("t", "c", self.contract_provenance(), receipts)
+        self.assertEqual(verdict.verdict, "pass")
+        self.assertEqual(verdict.details["controls"]["observed_red_mutation_controls"], 1)
+        self.assertEqual(len(verdict.details["controls"]["contradictions"]), 1)
+        self.assertEqual(len(verdict.details["controls"]["other_controls"]), 1)
+
+    def test_a_red_control_on_a_rejected_receipt_qualifies(self):
+        # The legitimate case, stated explicitly: the carrying receipt is
+        # a non-acceptance, so the oracle really was watched to fail.
+        receipts = [evidence_receipt(control=self.mutation())]
+        self.assertEqual(receipts[0].verdict, "rejected")
+        verdict = run_audit("t", "c", self.contract_provenance(), receipts)
+        self.assertEqual(verdict.verdict, "pass")
+        self.assertEqual(verdict.details["controls"]["observed_red_mutation_controls"], 1)
+        self.assertEqual(verdict.details["controls"]["contradictions"], [])
+
     def test_abstains_for_a_probe_grade_claim(self):
         provenance = self.contract_provenance(claim_grade="probe")
         ok, details = check_controls(provenance, [evidence_receipt()])

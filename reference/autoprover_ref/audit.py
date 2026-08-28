@@ -520,7 +520,21 @@ def check_controls(
     """Heuristic (e). For a claim presented as CONTRACT-grade, flags an
     evidence set that contains no control receipt anyone watched fail:
     no receipt whose `control` block names this claim, is of kind
-    "mutation", predicted "red", and observed what it predicted.
+    "mutation", predicted "red", observed what it predicted, AND whose
+    own verdict is a non-acceptance.
+
+    That last condition is why a control cannot be written into being. A
+    `control` block is metadata a caller supplies to `KernelGate.check`,
+    which copies it onto the receipt unchanged; the gate does not derive
+    `observed` from the checker's output, and it has no way to. So a
+    control block alone is a caller's assertion that something went red,
+    and qualifying on it alone lets an unfalsifiable oracle satisfy "a
+    check somebody watched fail" with a receipt in which nothing ever
+    failed. The receipt's `verdict` is the part of the same artifact the
+    checker actually produced, so the two must agree: an observed-red
+    mutation control on an ACCEPTED receipt is a self-contradiction. It
+    is reported in the details under `contradictions` — never counted as
+    qualification, and never dropped quietly.
 
     A check nobody has ever seen fail is untested. An oracle that reads
     the value it is supposed to be checking, a postcondition too weak to
@@ -579,29 +593,59 @@ def check_controls(
         }
 
     claim_id = provenance.claim_id
-    controls = [r.control for r in receipts if r.control is not None and r.control.of_claim == claim_id]
-    qualifying = [
-        c for c in controls
-        if c.kind == "mutation" and c.expectation == "red" and c.passed()
+    # Keep each control WITH the receipt carrying it: a control block is
+    # metadata a caller wrote, and only the receipt's own verdict says
+    # what the checker actually did.
+    carried = [
+        (r, r.control) for r in receipts
+        if r.control is not None and r.control.of_claim == claim_id
     ]
 
+    qualifying_indices: set[int] = set()
+    contradictions: list[dict] = []
+    for index, (receipt, control) in enumerate(carried):
+        if not (control.kind == "mutation" and control.expectation == "red" and control.passed()):
+            continue
+        if receipt.verdict == "accepted":
+            contradictions.append({
+                "kind": control.kind,
+                "expectation": control.expectation,
+                "observed": control.observed,
+                "carrying_receipt_verdict": receipt.verdict,
+                "target_id": receipt.target_id,
+                "candidate_id": receipt.candidate_id,
+                "contradiction": (
+                    "the control block reports an observed red while the receipt carrying "
+                    "it reports verdict 'accepted': the same artifact says both that the "
+                    "oracle fired and that nothing did"
+                ),
+            })
+            continue
+        qualifying_indices.add(index)
+
+    # Indexed, not value-filtered: two byte-identical control blocks can
+    # qualify differently (one on a rejected receipt, one on an accepted
+    # one), and dataclass equality would silently drop the second.
     other_controls = [
         {
-            "kind": c.kind,
-            "expectation": c.expectation,
-            "observed": c.observed,
-            "behaved_as_predicted": c.passed(),
+            "kind": control.kind,
+            "expectation": control.expectation,
+            "observed": control.observed,
+            "behaved_as_predicted": control.passed(),
+            "carrying_receipt_verdict": receipt.verdict,
         }
-        for c in controls if c not in qualifying
+        for index, (receipt, control) in enumerate(carried)
+        if index not in qualifying_indices
     ]
 
-    if qualifying:
+    if qualifying_indices:
         return True, {
             "check": "controls",
             "judged": True,
             "claim_id": claim_id,
-            "observed_red_mutation_controls": len(qualifying),
+            "observed_red_mutation_controls": len(qualifying_indices),
             "other_controls": other_controls,
+            "contradictions": contradictions,
         }
 
     return False, {
@@ -609,12 +653,14 @@ def check_controls(
         "judged": True,
         "claim_id": claim_id,
         "receipts_searched": len(receipts),
-        "controls_found": len(controls),
+        "controls_found": len(carried),
         "observed_red_mutation_controls": 0,
         "other_controls": other_controls,
+        "contradictions": contradictions,
         "required": (
             "at least one control receipt of kind 'mutation' with expectation 'red' whose "
-            "observation matched — a check nobody watched fail is untested"
+            "observation matched AND whose carrying receipt's verdict is a non-acceptance "
+            "— a check nobody watched fail is untested"
         ),
     }
 
