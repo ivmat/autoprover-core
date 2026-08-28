@@ -260,18 +260,24 @@ class ToolFailureTests(unittest.TestCase):
         self.assertNotEqual(receipt.verdict, "rejected")
         self.assertEqual(receipt.failure_kind, "unsupported-construct")
 
-    def test_a_1_0_0_gate_refuses_to_drop_a_reported_failure_kind(self):
-        # 1.0.0 has no field for it. Writing a bare 'error' would lose
-        # the retry-bigger vs out-of-scope distinction, so the gate says
-        # so loudly instead of quietly discarding it.
+    def test_a_1_0_0_gate_still_emits_a_receipt_for_a_reported_failure_kind(self):
+        # 1.0.0 has no field for `failure_kind`, but verdict 'error' was
+        # always in its enum. A 1.0.0 gate must still emit a receipt -
+        # never strand an unlaunchable checker's run with an exception
+        # and no artifact - it just cannot record which kind of failure
+        # this was.
         gate = KernelGate(
             checker_command=self.failing_checker("oom"),
             checker_name="fake-lean", checker_version="0.0.0",
             kind="kernel", toolchain_id="fake-toolchain-1",
         )
-        with self.assertRaises(ValueError) as ctx:
-            gate.check(target_id="t1", candidate_id="c1", candidate_file="t1.lean")
-        self.assertIn("oom", str(ctx.exception))
+        receipt = gate.check(target_id="t1", candidate_id="c1", candidate_file="t1.lean")
+        self.assertEqual(receipt.schema_version, "1.0.0")
+        self.assertEqual(receipt.verdict, "error")
+        self.assertIsNone(receipt.failure_kind)
+        self.assertIsNone(receipt.certificate)
+        self.assertEqual([o.status for o in receipt.obligations], ["not-exercised"])
+        validate_receipt_dict(receipt.to_dict())
 
     def test_unknown_failure_kind_rejected_at_the_seam(self):
         with self.assertRaises(ValueError):

@@ -26,7 +26,12 @@ more resources" or "this clause is out of scope for this tool". So the
 seam carries a `failure_kind`, the gate maps any non-null one to
 verdict `error` with the kind recorded, and the seam takes a `timeout`
 so a hung checker becomes a recorded `timeout` error rather than a
-process nobody bounded.
+process nobody bounded. `error` is a legacy 1.0.0 verdict too (the
+schema always had it in its enum), so a gate emitting 1.0.0 receipts
+maps a reported `failure_kind` to that same `error` verdict — it just
+cannot record *which kind* of failure, since 1.0.0 predates that field.
+Either way an unlaunchable or crashed checker always leaves a receipt
+behind; it never strands the queue with an exception and no artifact.
 """
 
 from __future__ import annotations
@@ -279,14 +284,15 @@ class KernelGate:
         result = self.checker_command(candidate_file, self.timeout)
 
         if result.failure_kind is not None:
-            if self.receipt_schema_version != "2.0.0":
-                raise ValueError(
-                    f"the checker reported failure_kind={result.failure_kind!r}, but this gate "
-                    f"emits receipt schema 1.0.0, which has no field to record it. Configure "
-                    f"subject + toolchain + claim_id to emit 2.0.0 receipts. Dropping the kind "
-                    f"and writing a bare 'error' would lose exactly the distinction "
-                    f"(retry-bigger vs out-of-scope) it exists to carry"
-                )
+            # verdict 'error' is in the 1.0.0 enum too (it was always
+            # reachable in the schema, just unreachable in code before
+            # this gate existed - see maintainers/divergences-from-
+            # architecture.md). What 1.0.0 has no field for is the
+            # `failure_kind` detail itself, so a 1.0.0 gate still emits
+            # a legacy `error`-shaped receipt - never a receiptless
+            # exception that strands the queue - it just cannot say
+            # *which kind* of tool failure this was; a 2.0.0 gate
+            # records the kind on the receipt as before.
             verdict = "error"
         else:
             verdict = "accepted" if result.accepted else "rejected"
@@ -344,7 +350,7 @@ class KernelGate:
             claim_id=self.claim_id,
             subject=self.subject,
             toolchain=self.toolchain,
-            failure_kind=result.failure_kind,
+            failure_kind=result.failure_kind if self.receipt_schema_version == "2.0.0" else None,
             control=control,
         )
 

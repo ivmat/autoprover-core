@@ -83,7 +83,12 @@ than as gaps, so the history of the interface stays legible:
   with a declared expectation and a measured observation). The checker
   seam gained a timeout to match, and `KernelGate` maps any reported
   `failure_kind` to `error` with the kind recorded rather than to
-  `rejected`.
+  `rejected`. A 1.0.0 gate — `error` was already in that schema's
+  verdict enum, just unreachable in code before this module existed —
+  gets the same mapping to `error`, minus the kind: 1.0.0 has no field
+  to record `failure_kind` in, so it emits a legacy `error`-shaped
+  receipt with that detail silently reduced rather than raising and
+  leaving an unlaunchable checker's run with no receipt at all.
 
   **What that bullet used to overstate, now corrected.** Mapping the
   verdict at the gate was only the first half. Downstream,
