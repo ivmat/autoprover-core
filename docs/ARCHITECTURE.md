@@ -1,5 +1,19 @@
 # Architecture: how to build an autonomous proving system
 
+## 0. Overview
+
+This document argues that an autonomous proving system is only as
+trustworthy as the typed contracts between its components, never the
+prose summaries between them. Seven sections make that case, each
+following the same assume/guarantee template: §1 target selection and
+decomposition, §2 the evidence-driven work queue (its state diagram is
+there), §3 LLM provers as an unreliable, gated source of candidates, §4
+the kernel gate as the one sound oracle, §5 why the kernel alone is not
+enough (the semantic audit layer), §6 the monotone ratchet, and §7
+receipts as the contract that ties every boundary together. A closing
+section maps the pattern onto the runnable reference implementation in
+`reference/`.
+
 This document describes a general pattern for a system that grows a
 machine-checked body of mathematical results with LLMs doing the proof
 search. It is written as a how-to, not as a report on any particular
