@@ -1,9 +1,11 @@
 name: CI
 
-# Two claims this repository makes that a reader should not have to take on
+# Three claims this repository makes that a reader should not have to take on
 # the author's word: the corpus is kernel-green under its pinned toolchain,
-# and the reference implementation's test suite passes on stock Python.
-# This workflow checks both on every push and pull request.
+# the reference implementation's test suite passes on stock Python, and the
+# corpus catalog still describes the corpus that exists — same modules, same
+# counts, and a stated restriction behind every `scoped` flag.
+# This workflow checks all three on every push and pull request.
 
 on:
   push:
@@ -47,3 +49,22 @@ jobs:
       - name: run the test suite
         run: python3 run_tests.py
         working-directory: reference
+
+  catalog:
+    name: catalog — check_catalog.py (corpus/CATALOG.md vs the corpus)
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout v5, pinned by commit SHA
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      # Stock python3 again, and no Lean: the catalog is checked against the
+      # module files and the import root as text, so this job needs no
+      # toolchain and cannot be held up by one.
+      #
+      # The selftest runs FIRST and on purpose. It plants violations in a
+      # temporary copy and requires each to be caught, so a green result below
+      # means "the catalog is consistent" rather than "the checker matched
+      # nothing". A check nobody has watched fail is not known to be a check.
+      - name: selftest — planted violations must be caught
+        run: python3 corpus/check_catalog.py --selftest
+      - name: check the catalog against the corpus
+        run: python3 corpus/check_catalog.py
