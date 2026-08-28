@@ -423,14 +423,20 @@ UNIVERSAL_SCOPE_SIGNALS: tuple[str, ...] = (
     "any ", "all ",
 )
 
-# A Lean-style quantified-variable binder, e.g. "(n : Nat)" or
-# "(l : List Nat)" — structural evidence the statement is actually stated
-# about a variable, not a fixed instance. Intentionally narrow (matches
-# this project's corpus style, see corpus/); a statement written in a
-# different surface syntax may need a different pattern, which is exactly
-# the kind of ordinary, contributable engineering the other two checks in
-# this module already describe.
-_BINDER_PATTERN = re.compile(r"\(\s*[a-zA-Z_][a-zA-Z0-9_]*\s*:\s*[A-Za-z]")
+# A Lean-style quantified-variable binder — structural evidence the
+# statement is actually stated about a variable, not a fixed instance.
+# All three of Lean's binder brackets count, because all three quantify:
+# explicit "(n : Nat)", implicit "{α : Type}", and instance
+# "[inst : DecidableEq α]". Matching only the round brackets flagged
+# `theorem foo {α : Type} ...` as having no quantified variable at all,
+# which is a false positive on exactly the most general theorems. The
+# identifier and type-head classes are Unicode letter classes rather than
+# [A-Za-z], since Lean's usual type variables (α, β, σ) are not ASCII.
+# Still a syntactic pattern over one surface syntax, not a generality
+# checker; a statement written in another syntax may need another
+# pattern, which is the ordinary contributable engineering the rest of
+# this module already describes.
+_BINDER_PATTERN = re.compile(r"[(\[{]\s*[^\W\d]\w*\s*:\s*[^\W\d]")
 
 # A would-be-universal variable pinned to one concrete numeral, e.g.
 # "n = 5" — structural evidence the statement narrows to a single value

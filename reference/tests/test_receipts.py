@@ -709,6 +709,32 @@ class Receipt2SchemaRejectionTests(unittest.TestCase):
         with self.assertRaises(SchemaValidationError):
             validate_receipt_dict(doc)
 
+    def test_rejects_a_negative_coverage_count(self):
+        # A count of states cannot be negative. The dataclass has always
+        # refused one; the schema has to as well, because a document read
+        # from disk never went through the dataclass.
+        doc = make_model_checker_receipt_v2(
+            obligations=(Obligation(
+                id="t2", status="held",
+                coverage=Coverage(states_satisfying=3, states_violating=1, exhaustive=False),
+            ),),
+        ).to_dict()
+        for key in ("states_satisfying", "states_violating"):
+            with self.subTest(key=key):
+                bad = json.loads(json.dumps(doc))
+                bad["obligations"][0]["coverage"][key] = -1
+                with self.assertRaises(SchemaValidationError):
+                    validate_receipt_dict(bad)
+
+    def test_rejects_a_blank_subject_unit(self):
+        # `unit` is nullable and null MEANS "the whole subject at that
+        # commit". An empty string is neither that nor a unit name, and
+        # the constructor already refuses it.
+        doc = make_kernel_receipt_v2().to_dict()
+        doc["subject"]["unit"] = ""
+        with self.assertRaises(SchemaValidationError):
+            validate_receipt_dict(doc)
+
     def test_rejects_unknown_control_kind_and_expectation(self):
         base = make_model_checker_receipt_v2(
             control=Control(kind="mutation", expectation="red", observed="red", of_claim="claim-1"),
@@ -778,6 +804,45 @@ class AtomicWriteTests(TempDirCase):
         self.assertEqual(path.read_bytes(), original_bytes)
         leftovers = [p for p in path.parent.iterdir() if p != path]
         self.assertEqual(leftovers, [], f"unexpected leftover files: {leftovers}")
+
+
+class AuditVerdictVersionDisciplineTests(unittest.TestCase):
+    """The audit schema forbids a document from carrying a failure reason
+    its own version never defined. The constructor has to enforce the
+    same rule: an AuditVerdict that cannot be written is better caught
+    where it is built than where it is serialized."""
+
+    @staticmethod
+    def verdict(schema_version, failure_reason):
+        return AuditVerdict(
+            target_id="t", candidate_id="c", verdict="fail",
+            failure_reason=failure_reason, details={}, produced_at=now_iso(),
+            schema_version=schema_version,
+        )
+
+    def test_1_0_0_refuses_a_reason_introduced_after_it(self):
+        for reason in ("unexercised-hypothesis", "missing-control"):
+            with self.subTest(reason=reason):
+                with self.assertRaises(ValueError):
+                    self.verdict("1.0.0", reason)
+
+    def test_1_1_0_refuses_the_1_2_0_reason(self):
+        with self.assertRaises(ValueError):
+            self.verdict("1.1.0", "missing-control")
+
+    def test_each_version_accepts_the_reasons_it_defines(self):
+        for version, reason in (
+            ("1.0.0", "vacuous-precondition"),
+            ("1.1.0", "unexercised-hypothesis"),
+            ("1.2.0", "missing-control"),
+        ):
+            with self.subTest(version=version):
+                verdict = self.verdict(version, reason)
+                validate_audit_dict(verdict.to_dict())  # must not raise
+
+    def test_unpublished_audit_schema_version_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.verdict("9.9.9", "vacuous-precondition")
 
 
 if __name__ == "__main__":

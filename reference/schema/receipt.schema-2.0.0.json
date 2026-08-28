@@ -55,7 +55,8 @@
         "commit": {"type": "string", "minLength": 1, "description": "The exact commit of that tree the verdict was measured on."},
         "unit": {
           "type": ["string", "null"],
-          "description": "Nullable. The sub-unit (module, crate, package, file) within the subject, or null meaning explicitly 'the whole subject at that commit, not a sub-unit' — never 'unknown'."
+          "minLength": 1,
+          "description": "Nullable. The sub-unit (module, crate, package, file) within the subject, or null meaning explicitly 'the whole subject at that commit, not a sub-unit' — never 'unknown'. An empty string is neither, and is refused rather than read as either one."
         }
       }
     },
@@ -177,8 +178,8 @@
             "required": ["states_satisfying", "states_violating", "exhaustive"],
             "description": "Nullable. What an enumerating checker measured about this obligation's precondition: how many explored states satisfied it, how many violated it, and whether the exploration was exhaustive. Null means the checker reported no coverage for this obligation (a proof kernel enumerates nothing), never 'coverage was fine'. Carrying it HERE is what lets the semantic audit judge hypothesis coverage on receipt evidence instead of abstaining for want of it.",
             "properties": {
-              "states_satisfying": {"type": "integer"},
-              "states_violating": {"type": "integer"},
+              "states_satisfying": {"type": "integer", "minimum": 0},
+              "states_violating": {"type": "integer", "minimum": 0},
               "exhaustive": {
                 "type": "boolean",
                 "description": "True iff the counts range over the whole reachable set rather than a bound-truncated slice of it. It changes what the counts MEAN, so it travels with them."

@@ -2,7 +2,8 @@
 
 This implements only the subset of JSON Schema (roughly draft-07) that the
 schemas in ``reference/schema/`` actually use: ``type``, ``const``,
-``enum``, ``minLength``, ``pattern``, ``properties``, ``required``,
+``enum``, ``minLength``, ``minimum``, ``pattern``, ``properties``,
+``required``,
 ``additionalProperties``, ``items``, ``minItems``, ``allOf``, ``anyOf``,
 ``oneOf``, ``if``/``then``/``else``, and ``not``.
 
@@ -81,6 +82,10 @@ def iter_errors(instance: Any, schema: dict, path: str = "$") -> list[str]:
 
     if "enum" in schema and instance not in schema["enum"]:
         errors.append(f"{path}: {instance!r} is not one of {schema['enum']!r}")
+
+    if isinstance(instance, (int, float)) and not isinstance(instance, bool):
+        if "minimum" in schema and instance < schema["minimum"]:
+            errors.append(f"{path}: {instance!r} < minimum {schema['minimum']}")
 
     if isinstance(instance, str):
         if "minLength" in schema and len(instance) < schema["minLength"]:

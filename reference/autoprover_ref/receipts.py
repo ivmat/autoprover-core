@@ -28,6 +28,7 @@ __all__ = [
     "RECEIPT_SCHEMA_VERSION",
     "RECEIPT_SCHEMA_VERSIONS",
     "AUDIT_SCHEMA_VERSION",
+    "AUDIT_SCHEMA_VERSIONS",
     "Checker",
     "Certificate",
     "Tool",
@@ -74,6 +75,7 @@ RECEIPT_SCHEMA_VERSIONS = ("1.0.0", "2.0.0")
 # each document from carrying a code its own version never defined; the
 # receipt schema is versioned separately and is unaffected.
 AUDIT_SCHEMA_VERSION = "1.2.0"
+AUDIT_SCHEMA_VERSIONS = ("1.0.0", "1.1.0", "1.2.0")
 
 _SCHEMA_DIR = Path(__file__).resolve().parent.parent / "schema"
 
@@ -99,6 +101,26 @@ _AUDIT_FAILURE_REASONS = (
     "scope-narrower-than-claimed",
     "missing-control",
 )
+
+# Which reasons each published audit-schema version defines. A document
+# may never carry a code its own version did not have — the schema says
+# so in its allOf blocks, and the constructor says so here, because a
+# verdict that cannot be written is better refused where it is built
+# than where it is serialized.
+_AUDIT_REASONS_BY_VERSION = {
+    "1.0.0": (
+        "vacuous-precondition",
+        "name-content-mismatch",
+        "scope-narrower-than-claimed",
+    ),
+    "1.1.0": (
+        "vacuous-precondition",
+        "unexercised-hypothesis",
+        "name-content-mismatch",
+        "scope-narrower-than-claimed",
+    ),
+    "1.2.0": _AUDIT_FAILURE_REASONS,
+}
 
 
 def now_iso() -> str:
@@ -651,15 +673,29 @@ class AuditVerdict:
     schema_version: str = AUDIT_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
+        if self.schema_version not in _AUDIT_REASONS_BY_VERSION:
+            raise ValueError(
+                f"schema_version must be one of {AUDIT_SCHEMA_VERSIONS}, "
+                f"got {self.schema_version!r}"
+            )
         if self.verdict not in _AUDIT_VERDICTS:
             raise ValueError(f"verdict must be one of {_AUDIT_VERDICTS}, got {self.verdict!r}")
         if self.verdict == "pass" and self.failure_reason is not None:
             raise ValueError("failure_reason must be null when verdict == 'pass'")
-        if self.verdict == "fail" and self.failure_reason not in _AUDIT_FAILURE_REASONS:
-            raise ValueError(
-                f"failure_reason must be one of {_AUDIT_FAILURE_REASONS} when verdict == 'fail', "
-                f"got {self.failure_reason!r}"
-            )
+        if self.verdict == "fail":
+            permitted = _AUDIT_REASONS_BY_VERSION[self.schema_version]
+            if self.failure_reason not in permitted:
+                introduced_later = self.failure_reason in _AUDIT_FAILURE_REASONS
+                raise ValueError(
+                    f"failure_reason {self.failure_reason!r} is not available in audit schema "
+                    f"{self.schema_version}"
+                    + (
+                        " — it was introduced in a later version, and a document may not carry "
+                        "a code its own format never defined (INTERFACES.md property 5)"
+                        if introduced_later
+                        else f"; permitted there: {permitted}"
+                    )
+                )
 
     def to_dict(self) -> dict:
         return {

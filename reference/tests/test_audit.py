@@ -368,6 +368,39 @@ class ScopeCheckTests(unittest.TestCase):
         self.assertIsNone(verdict.failure_reason)
         self.assertTrue(verdict.details["scope"]["judged"])
 
+    def test_implicit_and_instance_binders_count_as_binders(self):
+        # Lean writes a general theorem's binders three ways: explicit
+        # `(x : T)`, implicit `{x : T}`, instance `[inst : C x]`. A
+        # statement quantified with the last two is general; flagging it
+        # "no-quantified-variable-binder" is a false positive on exactly
+        # the corpus's most general theorems.
+        for statement in (
+            "theorem lfp_is_least {α : Type} (f : α -> α) : IsLeast (fixpoints f)",
+            "theorem dedup_len [DecidableEq α] (l : List α) : (dedup l).length <= l.length",
+        ):
+            with self.subTest(statement=statement):
+                provenance = TargetProvenance(
+                    source="synthetic",
+                    statement_text=statement,
+                    claimed_scope="for any type, this holds",
+                )
+                ok, details = check_scope(provenance)
+                self.assertTrue(ok, details)
+
+    def test_a_statement_with_no_binder_at_all_is_still_flagged(self):
+        # The broadened pattern must not have become "matches anything":
+        # a bracketed list literal is not a binder.
+        provenance = TargetProvenance(
+            source="synthetic",
+            statement_text="theorem example_sorted : Sorted [1, 2, 3]",
+            claimed_scope="for all lists, this holds",
+        )
+        ok, details = check_scope(provenance)
+        self.assertFalse(ok)
+        self.assertIn(
+            {"signal": "no-quantified-variable-binder"}, details["narrowing_evidence"],
+        )
+
     def test_abstains_when_no_claimed_scope_declared(self):
         provenance = TargetProvenance(
             source="synthetic",
