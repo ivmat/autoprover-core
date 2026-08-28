@@ -163,6 +163,7 @@ class TargetQueue:
         if self.log_path.exists():
             self._events = self._read_log(self.log_path)
         self._state: dict[str, State] = self._fold(self._events)
+        self._candidate: dict[str, str] = self._fold_candidates(self._events)
 
     # -- construction / persistence ---------------------------------
 
@@ -186,6 +187,19 @@ class TargetQueue:
         for event in events:
             state[event["target_id"]] = State(event["to_state"])
         return state
+
+    @staticmethod
+    def _fold_candidates(events: list[dict]) -> dict[str, str]:
+        """Rebuild target_id -> the candidate its evidence is currently
+        bound to, by the same fold-the-log discipline `_fold` uses. A new
+        `record_candidate` rebinds; nothing else changes the binding, so
+        every artifact between one candidate event and the next has to be
+        about that candidate."""
+        candidates: dict[str, str] = {}
+        for event in events:
+            if event["evidence_kind"] == "candidate_artifact":
+                candidates[event["target_id"]] = event["evidence"]["candidate_id"]
+        return candidates
 
     @classmethod
     def replay(cls, log_path: Union[str, Path]) -> "TargetQueue":
@@ -221,6 +235,11 @@ class TargetQueue:
     def state_of(self, target_id: str) -> Optional[State]:
         return self._state.get(target_id)
 
+    def active_candidate(self, target_id: str) -> Optional[str]:
+        """The candidate id every downstream artifact for this target
+        must be about, or None if no candidate has been recorded yet."""
+        return self._candidate.get(target_id)
+
     def events_for(self, target_id: str) -> list[dict]:
         return [e for e in self._events if e["target_id"] == target_id]
 
@@ -238,6 +257,25 @@ class TargetQueue:
                 f"{[s.value for s in expected]}"
             )
         return current
+
+    def _require_active_candidate(self, target_id: str, candidate_id: str, what: str) -> None:
+        """Refuse an artifact about a candidate this target's evidence
+        is not bound to. Without this, the public API reaches `accepted`
+        with a candidate artifact for c1, a kernel receipt for c2 and an
+        audit verdict for c3 — three artifacts, no two of them about the
+        same thing, and a state nothing produced the evidence for."""
+        active = self._candidate.get(target_id)
+        if active is None:
+            raise InvalidTransition(
+                f"target {target_id!r} has no recorded candidate, so there is nothing for "
+                f"this {what} to be evidence about"
+            )
+        if candidate_id != active:
+            raise InvalidTransition(
+                f"{what}.candidate_id {candidate_id!r} is not the candidate this target's "
+                f"evidence is bound to ({active!r}); evidence about another candidate cannot "
+                f"advance this one's state"
+            )
 
     @staticmethod
     def _require_type(evidence, expected_type: type) -> None:
@@ -270,6 +308,9 @@ class TargetQueue:
         self._require_state(target_id, State.ATTEMPTING)
         self._append(target_id, State.ATTEMPTING, State.CANDIDATE_PRODUCED,
                      "candidate_artifact", _evidence_dict(evidence))
+        # Bind this target's evidence to this candidate: every artifact
+        # from here to the next candidate has to be about it.
+        self._candidate[target_id] = evidence.candidate_id
         return State.CANDIDATE_PRODUCED
 
     def record_no_candidate(self, target_id: str, evidence: NoCandidateProduced,
@@ -306,6 +347,7 @@ class TargetQueue:
             raise InvalidTransition(
                 f"receipt.target_id {receipt.target_id!r} does not match {target_id!r}"
             )
+        self._require_active_candidate(target_id, receipt.candidate_id, "receipt")
         if receipt.verdict == "accepted":
             to_state = State.KERNEL_CHECKED
         elif receipt.verdict == "error":
@@ -364,6 +406,7 @@ class TargetQueue:
             raise InvalidTransition(
                 f"audit verdict.target_id {verdict.target_id!r} does not match {target_id!r}"
             )
+        self._require_active_candidate(target_id, verdict.candidate_id, "audit verdict")
         doc = verdict.to_dict()
         self._append(target_id, State.KERNEL_CHECKED, State.AUDITED, "audit_verdict", doc)
         to_state = State.ACCEPTED if verdict.verdict == "pass" else State.AUDIT_REJECTED

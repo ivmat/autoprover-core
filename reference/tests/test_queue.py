@@ -255,6 +255,64 @@ class RefusesEvidencelessTransitionTests(TempDirCase):
             q.record_kernel_receipt("t1", kernel_receipt("t1", "c1"))
 
 
+class EvidenceIsBoundToOneCandidateTests(TempDirCase):
+    """"No component may set a state it did not produce evidence for"
+    (module docstring) has to mean evidence about the SAME candidate.
+    Reaching `accepted` with a candidate artifact for c1, a kernel
+    receipt for c2 and an audit verdict for c3 is three components each
+    talking about something else."""
+
+    def _at_candidate(self, candidate_id="c1"):
+        q = TargetQueue(self.tmp_path("q.jsonl"))
+        q.enqueue("t1", TargetEntry(statement="s", provenance={}))
+        q.start_attempt("t1", AttemptStarted(attempt_id="a1", prover_name="p"))
+        q.record_candidate(
+            "t1", CandidateArtifact(candidate_id=candidate_id, artifact_path="c.lean"),
+        )
+        return q
+
+    def test_kernel_receipt_for_another_candidate_is_refused(self):
+        q = self._at_candidate("c1")
+        with self.assertRaises(InvalidTransition):
+            q.record_kernel_receipt("t1", kernel_receipt("t1", "c2"))
+        self.assertEqual(q.state_of("t1"), State.CANDIDATE_PRODUCED)
+
+    def test_audit_verdict_for_another_candidate_is_refused(self):
+        q = self._at_candidate("c1")
+        q.record_kernel_receipt("t1", kernel_receipt("t1", "c1"))
+        with self.assertRaises(InvalidTransition):
+            q.record_audit("t1", audit_verdict("t1", "c3", verdict="pass"))
+        self.assertEqual(q.state_of("t1"), State.KERNEL_CHECKED)
+
+    def test_the_active_candidate_survives_replay(self):
+        # The binding is derived from the log like every other piece of
+        # state, so a fresh queue instance refuses the same mismatch.
+        log_path = self.tmp_path("q.jsonl")
+        q1 = TargetQueue(log_path)
+        q1.enqueue("t1", TargetEntry(statement="s", provenance={}))
+        q1.start_attempt("t1", AttemptStarted(attempt_id="a1", prover_name="p"))
+        q1.record_candidate("t1", CandidateArtifact(candidate_id="c1", artifact_path="c.lean"))
+
+        q2 = TargetQueue.replay(log_path)
+        self.assertEqual(q2.active_candidate("t1"), "c1")
+        with self.assertRaises(InvalidTransition):
+            q2.record_kernel_receipt("t1", kernel_receipt("t1", "c2"))
+
+    def test_a_second_attempt_rebinds_to_its_own_candidate(self):
+        q = self._at_candidate("c1")
+        q.record_kernel_receipt("t1", kernel_receipt("t1", "c1", verdict="rejected"))
+        q.requeue_from_kernel_rejected("t1", RequeueDecision(reason="try again"))
+        q.start_attempt("t1", AttemptStarted(attempt_id="a2", prover_name="p"))
+        q.record_candidate("t1", CandidateArtifact(candidate_id="c2", artifact_path="c2.lean"))
+        # The new candidate is the active one, and the OLD one is now
+        # the stale artifact that gets refused.
+        self.assertEqual(q.active_candidate("t1"), "c2")
+        with self.assertRaises(InvalidTransition):
+            q.record_kernel_receipt("t1", kernel_receipt("t1", "c1"))
+        self.assertEqual(q.record_kernel_receipt("t1", kernel_receipt("t1", "c2")),
+                         State.KERNEL_CHECKED)
+
+
 class StateRebuildByFoldingLogTests(TempDirCase):
     def test_replay_from_log_file_reproduces_state(self):
         log_path = self.tmp_path("q.jsonl")
