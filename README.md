@@ -51,8 +51,10 @@ Toolchains are pinned per package. License: Apache-2.0.
 - **`reference/`** — a dependency-free Python reference implementation
   of the pipeline the docs describe: versioned receipt and audit
   schemas, an evidence-driven work queue whose state is folded from an
-  append-only log, a pluggable kernel gate, structural audit checks
-  (vacuity, unexercised hypothesis, name/content correspondence, scope),
+  append-only log, a pluggable kernel gate, six structural audit checks
+  (vacuity, unexercised hypothesis, name/content correspondence, scope,
+  a missing observed-red control, and the current receipt's
+  per-obligation statuses),
   a small bounded model checker that reports each obligation's status
   (`held` / `vacuous` / `not-exercised` / `failed`), and a monotone
   ratchet — with a test suite and a worked Lean example. It is a

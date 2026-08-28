@@ -38,7 +38,7 @@ executable — see below.
 | `autoprover_ref/receipts.py` | §7 | Receipt/audit-verdict dataclasses, schema validation, atomic writes. |
 | `autoprover_ref/queue.py` | §2 | The evidence-driven target queue state machine. |
 | `autoprover_ref/kernel_gate.py` | §4 | The checker-as-sound-oracle wrapper (pluggable checker command, with a timeout and a tool-failure-vs-property-failure seam). |
-| `autoprover_ref/audit.py` | §5 | The semantic audit layer: vacuity, unexercised-hypothesis, name/content, scope, and missing-control heuristics. |
+| `autoprover_ref/audit.py` | §5 | The semantic audit layer: the vacuity, unexercised-hypothesis, name/content, scope and missing-control heuristics, plus the obligation-status check, which is not a heuristic — it reads the statuses the checker itself reported. |
 | `autoprover_ref/model_checker.py` | §4, §5 | A bounded model checker realizing the exhaustive obligation-level `held`/`vacuous`/`not-exercised`/`failed` bucket, wired in as a `kernel_gate.CheckerCommand`; also reports per-obligation precondition coverage for the audit layer. |
 | `autoprover_ref/ratchet.py` | §6 | The monotone accepted set, explicit removal, dependency recheck. |
 | `autoprover_ref/pipeline.py` | §§2–7 | Glue: drives one target through all of the above. |

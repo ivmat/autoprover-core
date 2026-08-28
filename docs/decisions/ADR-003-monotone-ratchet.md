@@ -18,9 +18,34 @@ Every accepted result is re-checked on every change to anything it
 depends on (a shared definition, a library the kernel trusts, the kernel
 version itself). A re-check failure is a loud, blocking, logged event —
 it blocks further progress on anything downstream of that result until
-resolved — rather than a quiet queue-state change. `reference/autoprover_ref/ratchet.py`
-implements the monotone accepted set and its explicit removal path, with
-dependency re-checking, matching this rule.
+resolved — rather than a quiet queue-state change.
+
+`reference/autoprover_ref/ratchet.py` implements the parts of that rule a
+library can implement, and only those. It holds the monotone accepted set
+and its explicit logged removal path. `recheck_dependents` marks accepted
+targets as owing a re-check because a named dependency changed, and
+`record_recheck_result` records the outcome: the entry is refreshed when a
+fresh receipt and audit still justify acceptance, and otherwise removed
+with a loud `BlockingEvent` raised. That cycle is a re-verification path
+and never a second way into the accepted set — it refuses a target with no
+outstanding mark, a `changed_dep` the target was not marked for, and a
+receipt/audit pair that is not about one artifact of this target, which is
+the same validation `accept()` performs.
+
+Two halves of the rule are deliberately left to the caller, and the
+reference implementation does not pretend otherwise:
+
+- **Which targets depend on what.** The ratchet holds no dependency graph.
+  The set of dependents is supplied by the caller on each
+  `recheck_dependents(changed_dep, dependents)` call, so "every accepted
+  result is re-checked on every change to anything it depends on" is a
+  guarantee about the dependencies the caller actually declares, not one
+  the library can make on its own.
+- **Blocking downstream progress.** `BlockingEvent` makes the failure
+  impossible to miss; it does not stop anything. A real scheduler would
+  refuse to schedule work depending on a target with an open blocking
+  event. This module surfaces the event and leaves that enforcement to
+  whatever schedules the work.
 
 ## Consequences
 

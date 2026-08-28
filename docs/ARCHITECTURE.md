@@ -43,7 +43,7 @@ proving practice:
   standard mathematical practice — big theorems are proved via a chain of
   smaller ones — and it matters more, not less, once an LLM is doing the
   search: smaller targets are easier to state precisely, easier to check
-  for vacuity (see §4), and easier to re-attempt independently when one
+  for vacuity (see §5), and easier to re-attempt independently when one
   step fails.
 - **Explicit provenance.** Every target records where its statement came
   from (a textbook, a paper, a spec) and, once proved, what it's allowed to
@@ -64,8 +64,19 @@ machine:
 ```
 queued → attempting → candidate-produced → kernel-checked
                                           ↘ kernel-rejected → queued (retry) | abandoned
+                                          ↘ checker-error   → queued (retry) | abandoned
 kernel-checked → audited → accepted (ratcheted) | audit-rejected → queued (retry) | abandoned
 ```
+
+`checker-error` is its own state and not a flavour of `kernel-rejected`,
+because the two call for opposite responses. A rejection says "this
+candidate is wrong, write another"; an error says "nothing is known about
+this candidate yet" — the checker timed out, ran out of memory, met a
+construct it does not support, or failed internally. Its retry asks for
+more resources or records the clause as out of scope for this tool; it
+does not ask a prover for a new candidate. Collapsing the two sends a
+prover chasing a ghost, and routes a tool failure as if a property had
+been refuted. See §4 for the verdict that produces this state.
 
 The state is not a status field an agent writes prose into — it is a
 value produced by a specific transition function, driven by a specific
@@ -112,9 +123,20 @@ trusted directly, rather than through another layer of checking.
 
 **Assume:** a candidate in the checker's input syntax, addressed to a
 specific target statement.
-**Guarantee:** a binary, machine-readable verdict — accepted or rejected —
-plus, on acceptance, a certificate the kernel itself can re-verify (a
-re-runnable proof object, not a log line saying "passed").
+**Guarantee:** a machine-readable verdict with exactly three values —
+`accepted`, `rejected`, or `error` — plus, when a proof kernel accepts, a
+certificate it can re-verify (a re-runnable proof object, not a log line
+saying "passed"). `error` means the checker produced no verdict at all:
+it timed out, ran out of memory, met a construct it does not support, or
+failed internally. It carries a `failure_kind` saying which, it is never
+coerced into a guessed accept or reject, and it is never routed as if a
+property had been refuted — a tool that fell over has told you nothing
+about the candidate. Note also that `unsupported-construct` is a fact
+about the tool's scope, not a red mark against the code.
+
+The certificate is a proof kernel's guarantee specifically. What a bounded
+model checker gives on acceptance instead is set out two paragraphs down,
+and the two must not be filed under one word.
 
 This is a genuine oracle in the technical sense: nothing downstream needs
 to re-derive what the kernel decided, only re-run its check if it wants
@@ -143,9 +165,9 @@ establish this formal statement, given these definitions?* It answers
 nothing about whether that formal statement is the theorem anyone wanted,
 or whether it says anything at all.
 
-Two failure modes make this concrete. Both are well-known failure modes
-in ordinary formal-verification work — they show up constantly in public
-tooling and in the review practice around it:
+Three failure modes make this concrete. All three are well-known failure
+modes in ordinary formal-verification work — they show up constantly in
+public tooling and in the review practice around it:
 
 - **Vacuous acceptance.** A statement of the form "if P then Q" is proved
   the moment P is shown to be impossible — Q never has to hold. A checker
@@ -225,7 +247,8 @@ Nothing above works without one closing discipline: **every verification
 run — kernel or audit — emits a structured, machine-readable result
 artifact**, never a log message meant for a human to interpret. A receipt
 records at minimum: which target, which candidate, which checker version,
-what verdict, and (on acceptance) a re-verifiable certificate.
+what verdict, and — when a proof kernel is what accepted it — a
+re-verifiable certificate.
 
 This is the same idea generalized across the whole pipeline: the queue
 transitions in §2 are driven by receipts, not assertions; the audit
@@ -262,13 +285,21 @@ dependency-free reference implementation of that pattern lives in
 properties of `docs/INTERFACES.md`), the closed-state work queue whose
 state is folded from an append-only evidence log rather than asserted
 (§2), a pluggable kernel gate that treats a checker's exit status as the
-only verdict (§4), the structural audit checks for vacuity, unexercised
-hypotheses, name/content correspondence and claimed scope (§5), and the
-monotone ratchet with an
-explicit, logged removal path (§6). It is deliberately a skeleton — the
-prover of §3 is an injected command, and the audit checks are honestly
-labelled heuristics, not sound procedures — so that the *interfaces*, not
-any one component, are what the code makes concrete. A worked example
+only verdict (§4), the six structural audit checks — vacuity, unexercised
+hypothesis, name/content correspondence, claimed scope, a missing
+observed-red control, and the current receipt's per-obligation statuses
+(§5) — and the monotone ratchet with an
+explicit, logged removal path (§6). It is deliberately a skeleton. There
+is no prover seam at all: `Pipeline.run_target` takes an already-produced
+candidate file, exactly as if a prover component upstream had just
+finished, so wiring in a real prover means recording the candidate on the
+queue yourself before calling it, or extending the pipeline with a
+`ProverCommand` seam analogous to the kernel gate's `CheckerCommand`. And
+five of the six audit checks are honestly labelled heuristics rather than
+sound procedures — the sixth is not a heuristic, it reads the statuses the
+checker itself reported. The point of the skeleton is that the
+*interfaces*, not any one component, are what the code makes concrete. A
+worked example
 drives one genuine and one vacuously-true theorem through the whole
 pipeline and shows the kernel accepting both while the audit layer
 rejects the vacuous one.

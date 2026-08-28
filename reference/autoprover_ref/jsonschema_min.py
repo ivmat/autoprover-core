@@ -1,11 +1,17 @@
 """A minimal, dependency-free JSON Schema validator.
 
-This implements only the subset of JSON Schema (roughly draft-07) that the
-schemas in ``reference/schema/`` actually use: ``type``, ``const``,
-``enum``, ``minLength``, ``minimum``, ``pattern``, ``properties``,
-``required``,
-``additionalProperties``, ``items``, ``minItems``, ``allOf``, ``anyOf``,
-``oneOf``, ``if``/``then``/``else``, and ``not``.
+This implements a small subset of JSON Schema (roughly draft-07). The
+keywords the schemas in ``reference/schema/`` actually use are ``type``,
+``const``, ``enum``, ``minLength``, ``minimum``, ``properties``,
+``required``, ``additionalProperties``, ``items``, ``allOf``, and
+``if``/``then``/``else``.
+
+Five more keywords are implemented and are used by no shipped schema:
+``pattern``, ``minItems``, ``anyOf``, ``oneOf``, and ``not``. They are
+named here rather than folded into the list above, because "the subset the
+schemas use" would then be a claim about this validator that the schemas do
+not back. Nothing in ``reference/schema/`` and nothing in the test suite
+exercises those five, so treat them as untested until a schema needs one.
 
 It is deliberately not a general-purpose JSON Schema engine. Extend the
 keyword set here only in lockstep with something a schema file actually

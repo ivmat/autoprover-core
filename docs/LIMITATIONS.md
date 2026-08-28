@@ -101,11 +101,14 @@ interesting case is genuinely exercised, not vacuously true.
 ## 7. The reference implementation is a skeleton
 
 The pipeline code in `reference/` exists to make the architecture concrete
-and runnable, not to be a production system. Its prover is an injected
-command; its audit checks (vacuity, unexercised hypothesis, name/content
-correspondence, scope) are **honestly-labelled heuristics, not sound
-decision procedures** — they
-can miss and, where they cannot tell, they abstain rather than guess; its
+and runnable, not to be a production system. It has no prover in it and no
+seam for one: it takes an already-produced candidate file and starts at the
+kernel gate. Five of its six audit checks (vacuity, unexercised hypothesis,
+name/content correspondence, scope, and a missing observed-red control) are
+**honestly-labelled heuristics, not sound decision procedures** — they can
+miss and, where they cannot tell, they abstain rather than guess. The sixth
+(the current receipt's per-obligation statuses) is not a heuristic: it
+reports what the checker itself said, obligation by obligation. Its
 bounded model checker is a small self-contained toy, not an industrial
 tool. What it demonstrates is the *interface discipline* — evidence-driven
 state, structured receipts, the kernel-versus-model-checker distinction,

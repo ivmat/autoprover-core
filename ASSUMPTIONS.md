@@ -4,7 +4,7 @@
 rests on — the corpus's kernel-green claim, the architecture's soundness
 argument, and any receipt this pipeline pattern produces. It includes the
 assumptions that are irrelevant almost always, because "almost always" is
-itself an assumption. `LIMITATIONS.md` states what the proofs do and do
+itself an assumption. `docs/LIMITATIONS.md` states what the proofs do and do
 not establish; this file states what the whole apparatus stands on
 underneath that.
 
@@ -43,7 +43,7 @@ reserved for in-focus entries.
   state without passing a sound gate; or a gate proves game-able by
   adversarial candidate structure.
   *load-bearing-for:* the entire pattern documented in
-  `ARCHITECTURE.md`.
+  `docs/ARCHITECTURE.md`.
 
 - **A-2 · The proof kernels are sound** — the Lean 4 kernel at the pinned
   toolchain version, and a bounded model checker's core decision
@@ -60,7 +60,7 @@ reserved for in-focus entries.
   *fails-if:* miscompilation evidence at the pinned versions;
   toolchain supply-chain compromise.
   *load-bearing-for:* the bridge from "verified model" to "the artifact
-  actually shipped" — see `LIMITATIONS.md` §2, which is the same gap
+  actually shipped" — see `docs/LIMITATIONS.md` §2, which is the same gap
   stated from the other side.
 
 - **A-4 · The LLM vendor's models act in good faith within their stated

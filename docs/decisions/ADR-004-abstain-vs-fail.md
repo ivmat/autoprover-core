@@ -48,13 +48,18 @@ to prose:
 A caller can always distinguish "this held," "this couldn't fire,"
 "this wasn't reached because of a bound," and "this failed" from the
 receipt alone, without inferring intent from an absence. An audit check
-that abstains passes without judging: it emits the same `pass` verdict
-a genuine pass would, and abstention currently produces no distinct
-failure output of its own — so a caller reading only the verdict field
-cannot separately tell "abstained" from "passed." No target is credited
-with a judgment the heuristic did not actually make, but that guarantee
-lives in the heuristic's own logic, not in a visible field on the
-receipt. The cost is more states to handle at every
+that abstains passes without judging, and says so in a field a caller can
+branch on. Every check writes its own block into the audit verdict's
+`details`, and every block carries `judged`: an abstention sets
+`judged: false` together with a `reason` naming what was missing — "no
+claimed_scope declared", "no enumerated-obligation evidence recorded",
+"claim_grade is 'probe', not 'contract'", "no kernel receipt supplied to
+judge obligation statuses". The `verdict` field alone still does not
+separate "abstained" from "passed", deliberately: both are `pass`, because
+an abstention is not a finding. A caller that wants the difference reads
+`details.<check>.judged`, and it is on the artifact rather than only in the
+heuristic's own logic. No target is credited with a judgment the heuristic
+did not actually make. The cost is more states to handle at every
 consumer of a receipt or audit verdict than a simple pass/fail model
 would require — a cost the architecture treats as necessary, per
 `docs/INTERFACES.md` property 3: "null never means a guess."

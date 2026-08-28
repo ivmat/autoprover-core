@@ -10,11 +10,10 @@ Simple-Technical-English edits; content unchanged).
 
 ## Divergences from a literal reading of ARCHITECTURE.md
 
-`docs/ARCHITECTURE.md` is prose; this package is code, and in three
-places the code makes a choice the prose leaves open. All three are
-recorded here rather than smoothed over, because the difference is the
-kind of thing a reader reconciling the two documents will otherwise trip
-on:
+`docs/ARCHITECTURE.md` is prose; this package is code, and in two places
+the code makes a choice the prose leaves open. Both are recorded here
+rather than smoothed over, because the difference is the kind of thing a
+reader reconciling the two documents will otherwise trip on:
 
 1. **The `kernel-checked → audited → accepted | audit-rejected` hop.**
    ARCHITECTURE.md §2's diagram draws one arrow chain through an
@@ -38,21 +37,26 @@ on:
    expect it to reject a model-checker receipt; a doc note saying "this
    state's name is a holdover from the diagram, not a restriction" would
    close that gap.
-3. **A `checker-error` state the §2 diagram does not draw.** The diagram
-   gives `candidate-produced` two successors, `kernel-checked` and
-   `kernel-rejected`, because it was drawn for a two-valued verdict.
-   Receipt schema 2.0.0 has three: `accepted`, `rejected`, and `error`,
-   the last meaning the checker produced no verdict at all. `queue.State`
-   therefore adds `checker-error`, reached only by an `error` receipt,
-   with its own requeue and abandon transitions. This is an addition to
-   the diagram rather than a reinterpretation of it: the alternative —
-   folding `error` into `kernel-rejected` — is what the schema forbids in
-   so many words ("never routed as if a property had been refuted"), and
-   the queue cannot honour that with only two successors to route into.
 
-Five further gaps between the prose and this package have since been
+Six further gaps between the prose and this package have since been
 closed. They are kept in this section, as implemented features rather
 than as gaps, so the history of the interface stays legible:
+
+- **A `checker-error` state the §2 diagram did not draw.** The diagram
+  gave `candidate-produced` two successors, `kernel-checked` and
+  `kernel-rejected`, because it was drawn for a two-valued verdict.
+  Receipt schema 2.0.0 has three: `accepted`, `rejected`, and `error`,
+  the last meaning the checker produced no verdict at all. `queue.State`
+  therefore added `checker-error`, reached only by an `error` receipt,
+  with its own requeue and abandon transitions — an addition to the
+  diagram rather than a reinterpretation of it, since the alternative
+  (folding `error` into `kernel-rejected`) is what the schema forbids in
+  so many words ("never routed as if a property had been refuted"), and
+  the queue cannot honour that with only two successors to route into.
+  This was carried as divergence 3 until §2's diagram gained the
+  `checker-error` branch and §4's guarantee was restated as three-valued;
+  the prose and the code now say the same thing, so it is a closed gap
+  rather than an open divergence.
 
 - **Provenance, a reachable `error` verdict, coverage on the receipt, and
   control receipts** were all absent from receipt schema 1.0.0, and each
@@ -88,7 +92,7 @@ than as gaps, so the history of the interface stays legible:
   requeue reason "kernel rejected candidate; eligible for retry": the
   ghost chase `kernel_gate.py`'s own docstring describes, reintroduced
   two modules later. The queue now routes `error` to its own
-  `checker-error` state (divergence 3 above), and the pipeline requeues
+  `checker-error` state (the closed gap above), and the pipeline requeues
   it with a reason naming the `failure_kind` and saying explicitly that
   this is a tool error, not a property refutation. The default checker
   command matches: a signal-killed process (negative return code) and a
@@ -160,3 +164,37 @@ than as gaps, so the history of the interface stays legible:
   `claimed_scope` is absent or doesn't itself assert generality — see
   [`reference/README.md`](../reference/README.md)'s "Honesty notes"
   section and `audit.py`'s module docstring.
+
+## Open residuals — named rather than closed
+
+Neither of these is fixed. They are written down so the next person
+reading the code finds a known gap rather than discovers one.
+
+- **A `failed` obligation on an `accepted` receipt is recorded, not
+  refused.** `audit.check_obligation_statuses` fails a target whose
+  receipt reports an obligation `vacuous` or `not-exercised`. An
+  obligation reported `failed` on a receipt whose overall verdict is
+  `accepted` is a different animal — a checker contradicting itself — and
+  the check puts it in `details["contradictory"]` so it cannot pass
+  unseen, but it does not fail the audit. That is deliberate as far as it
+  goes: the audit's failure-reason vocabulary is a closed enum with no
+  code for this finding, and reusing `vacuous-precondition` for it would
+  be exactly the category collapse this package exists to avoid. It is
+  still a hole. A contradictory receipt reaches the ratchet today, with
+  the contradiction sitting in a details field nothing is required to
+  read. Closing it needs one of two things, and which one is **undecided**:
+  a new audit failure reason (an audit-schema version bump, per
+  INTERFACES.md property 5), or a `Receipt` invariant that refuses to
+  construct an `accepted` receipt carrying a `failed` obligation at all —
+  which moves the finding from the audit layer to the receipt type, and is
+  arguably where a self-contradiction belongs.
+- **`details` is an unconstrained object in the audit schema.**
+  `audit.schema.json` types `details` as `{"type": "object"}` with a
+  description saying a caller "should be able to branch on its fields".
+  The reference implementation does put a per-check block in there, each
+  carrying `judged` and, on an abstention, a `reason` — and ADR-004 now
+  points callers at `details.<check>.judged`. The schema does not require
+  any of that shape, so a conforming document could carry none of it and
+  a caller branching on those fields would be relying on the
+  implementation rather than on the contract. Schematizing the variants
+  is the fix; it has not been done.

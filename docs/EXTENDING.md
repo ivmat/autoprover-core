@@ -26,10 +26,16 @@ Follow a single target from idea to accepted, matching the sections of
    of states (`queue.py`). Its state is never a prose status an agent
    writes — it is folded from an append-only log of evidence events. A
    state that no evidence justifies cannot be set.
-3. **Prover (§3).** A prover proposes a candidate proof. In the reference
-   implementation the prover is an *injected command* — the point of the
-   architecture is that soundness never depends on how plausible a
-   candidate looks, only on what the gate downstream decides.
+3. **Prover (§3).** A prover proposes a candidate proof. The reference
+   implementation contains no prover and no seam for one: `pipeline.py`
+   takes an already-produced candidate file, exactly as if a prover
+   upstream had just finished. Wiring in a real prover means recording the
+   candidate on the queue yourself (`queue.record_candidate`, or
+   `queue.record_no_candidate`) before calling `Pipeline.run_target`, or
+   adding a `ProverCommand` seam analogous to the kernel gate's
+   `CheckerCommand`. Nothing about soundness depends on that choice — the
+   point of the architecture is that soundness never depends on how
+   plausible a candidate looks, only on what the gate downstream decides.
 4. **Kernel gate (§4).** The candidate is checked by a sound oracle
    (`kernel_gate.py`). For a proof kernel the receipt carries a
    re-runnable certificate; for a bounded model checker
@@ -41,9 +47,13 @@ Follow a single target from idea to accepted, matching the sections of
    audit (`audit.py`): is the precondition satisfiable (non-vacuous); for
    a target discharged by enumeration, did any enumerated state actually
    violate that precondition, or did the hypothesis go unexercised; does
-   the statement correspond to its claimed name and scope? These checks are
-   honest heuristics — they abstain rather than guess — and a failure
-   routes the target back to the queue, it is not silently dropped.
+   the statement correspond to its claimed name and scope; for a claim
+   presented as CONTRACT-grade, does its evidence set contain a control that
+   was watched to fail; and does the current receipt report every obligation
+   as `held`? The first five are honest heuristics — they abstain rather
+   than guess — while the last is not a heuristic at all: it reads the
+   statuses the checker itself reported. A failure routes the target back to
+   the queue, it is not silently dropped.
 6. **Ratchet (§6).** Only a target with both a kernel-accept receipt and an
    audit pass is accepted into the monotone proven set (`ratchet.py`). It
    leaves that set only through an explicit, logged removal event.
