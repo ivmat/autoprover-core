@@ -3,7 +3,8 @@
 This is maintainer working material: a record of the specific places
 `reference/`'s code makes a choice that `docs/ARCHITECTURE.md`'s prose
 leaves open, plus the gaps between the two that have since been closed.
-Moved here verbatim from `reference/README.md`.
+Moved here from `reference/README.md` (with sentence-level
+Simple-Technical-English edits; content unchanged).
 
 ---
 
@@ -37,7 +38,7 @@ reader reconciling the two documents will otherwise trip on:
    state's name is a holdover from the diagram, not a restriction" would
    close that gap.
 
-Three further gaps between the prose and this package have since been
+Five further gaps between the prose and this package have since been
 closed. They are kept in this section, as implemented features rather
 than as gaps, so the history of the interface stays legible:
 
@@ -83,7 +84,9 @@ than as gaps, so the history of the interface stays legible:
   (precondition unsatisfiable in a bound-truncated one) directly from
   whether the exploration reached a fixed point, and reports both through
   exactly that `obligation_statuses` seam via
-  `model_checker.model_checker_command`. See "The model checker" above.
+  `model_checker.model_checker_command`. See
+  [`reference/README.md`](../reference/README.md)'s "The model checker"
+  section.
 - **`unexercised-hypothesis`**, the mirror image of the vacuity check,
   was not implemented in any version of this package before the audit
   schema's 1.1.0 revision: the model checker could already tell a caller
@@ -127,5 +130,6 @@ than as gaps, so the history of the interface stays legible:
   binder at all) when the claim asserts generality. Like the other two
   checks, it is honestly a heuristic over text/metadata, not a semantic
   generality prover, and it abstains (passes) rather than guesses when
-  `claimed_scope` is absent or doesn't itself assert generality — see the
-  honesty note above and `audit.py`'s module docstring.
+  `claimed_scope` is absent or doesn't itself assert generality — see
+  [`reference/README.md`](../reference/README.md)'s "Honesty notes"
+  section and `audit.py`'s module docstring.

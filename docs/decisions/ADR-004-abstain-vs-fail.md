@@ -47,10 +47,14 @@ to prose:
 
 A caller can always distinguish "this held," "this couldn't fire,"
 "this wasn't reached because of a bound," and "this failed" from the
-receipt alone, without inferring intent from an absence. An audit
-heuristic's abstention is itself visible and distinguishable from a
-pass, so a target is never credited with a judgment the heuristic did
-not actually make. The cost is more states to handle at every
+receipt alone, without inferring intent from an absence. An audit check
+that abstains passes without judging: it emits the same `pass` verdict
+a genuine pass would, and abstention currently produces no distinct
+failure output of its own — so a caller reading only the verdict field
+cannot separately tell "abstained" from "passed." No target is credited
+with a judgment the heuristic did not actually make, but that guarantee
+lives in the heuristic's own logic, not in a visible field on the
+receipt. The cost is more states to handle at every
 consumer of a receipt or audit verdict than a simple pass/fail model
 would require — a cost the architecture treats as necessary, per
 `docs/INTERFACES.md` property 3: "null never means a guess."

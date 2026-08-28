@@ -17,12 +17,17 @@ never on how plausible the candidate looks."
 
 ## Decision
 
-Soundness is placed entirely in `kernel_gate.py`, the reference
-implementation of `docs/ARCHITECTURE.md` §4's checker-as-sound-oracle. Its
-verdict comes entirely from a checker process's exit status, never from
-the prover's own claim: there is no code path that reads a "prover says
-this is correct" flag. `kernel_gate.py` is documented as the only sound
-component in the reference package for exactly this reason.
+The checker — a proof kernel or a bounded model checker, per
+`docs/ARCHITECTURE.md` §4's checker-as-sound-oracle — is the sound
+oracle; `kernel_gate.py` is the reference implementation of the wrapper
+around it. `kernel_gate.py`'s verdict is derived solely from the checker
+process's exit status, never from the prover's own claim: there is no
+code path that reads a "prover says this is correct" flag.
+`kernel_gate.py` is documented as the only sound component in the
+reference package for exactly this reason — consistent with
+`ASSUMPTIONS.md` A-1, which names the non-LLM gates soundness is
+reduced to in the plural (kernel, checker, audit), not as a single
+file.
 
 ## Consequences
 

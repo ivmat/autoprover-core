@@ -24,12 +24,18 @@ dependency re-checking, matching this rule.
 
 ## Consequences
 
-"Currently proven" always means what it says: a reader never has to ask
-whether a passing corpus is stale relative to a dependency change,
-because a dependency change that breaks a downstream result is a blocking
-event, not a silent drift. `docs/ARCHITECTURE.md` draws the explicit
-analogy to a regression-gated build: "the corpus is a ratchet, not a
-snapshot." The cost is that a shared-dependency change can legitimately
+"Currently proven" means what it says relative to the dependencies the
+ratchet has recorded and rechecked: a reader does not have to ask
+whether a passing corpus silently drifted, because a *recorded*
+dependency change that breaks a downstream result is a blocking event,
+not a silent drift. That is a monotonicity guarantee with explicit,
+logged removal — not an unconditional freshness claim; it holds only
+for dependencies the ratchet actually tracks, and it inherits the
+standing assumptions `ASSUMPTIONS.md` states for the rest of the
+apparatus (kernel soundness, honest receipts, and the rest).
+`docs/ARCHITECTURE.md` draws the explicit analogy to a regression-gated
+build: "the corpus is a ratchet, not a snapshot." The cost is that a
+shared-dependency change can legitimately
 halt progress on everything downstream of a newly-failing result until
 the failure is resolved or the result is removed through the logged
 removal path — there is no quieter option.

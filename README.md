@@ -67,9 +67,12 @@ Toolchains are pinned per package. License: Apache-2.0.
 
 A target moves through a small, closed-state queue: `queued →
 attempting → candidate-produced → kernel-checked → audited → accepted`,
-with explicit retry/abandon exits at each gate. The kernel gate and the
-audit layer are the two places soundness and honesty are actually
-enforced; the ratchet is what keeps "accepted" from silently regressing.
+with explicit retry/abandon exits at each gate. The kernel gate is
+where soundness is enforced; the audit layer is heuristic semantic
+checking — it can miss, and abstains where it cannot tell (see
+[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) §7) — that catches what
+the kernel structurally cannot see; the ratchet is what keeps
+"accepted" from silently regressing.
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2 for the queue and
 its diagram, and §6 for the ratchet.
 
@@ -93,7 +96,7 @@ one.
 
 Recorded as short ADRs, indexed at
 [`docs/decisions/README.md`](docs/decisions/README.md): the kernel gate
-as the sole trust boundary, receipt schema versioning, the monotone
+as where trust is decided, receipt schema versioning, the monotone
 ratchet, and the abstain-vs-fail / vacuous-vs-not-exercised discipline.
 
 ## 7. Glossary

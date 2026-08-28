@@ -24,23 +24,25 @@ account of what 1.0.0 lacked and why each absence mattered).
 `reference/schema/receipt.schema-2.0.0.json` ships as its own file,
 alongside `reference/schema/receipt.schema.json` (1.0.0), rather than
 widening the 1.0.0 schema in place. Every document declares its own
-`schema_version` as a required, `const`-validated field; a reader
-dispatches on that field and validates against the matching schema,
-never re-reading an old document as if it were the new format. As the
-2.0.0 schema's own description states: "a 1.0.0 reader meeting a 2.0.0
-document would find fields it cannot interpret, and a 1.0.0 document may
-not carry them."
+`schema_version` as a required, `const`-validated field; a conforming
+reader must dispatch on that field and validate against the matching
+schema, rather than re-reading an old document as if it were the new
+format. As the 2.0.0 schema's own description states: "a 1.0.0 reader
+meeting a 2.0.0 document would find fields it cannot interpret, and a
+1.0.0 document may not carry them."
 
 ## Consequences
 
-A 1.0.0 receipt on disk still validates as 1.0.0 and is never
-misread as 2.0.0; a 2.0.0 document may not omit what 2.0.0 requires, and
-a 1.0.0 document may not carry 2.0.0-only fields (`toolchain`, `subject`,
-`claim_id`, `failure_kind`, per-obligation `coverage`, `control`) —
-enforced by the schema, not by convention, and covered by
-`reference/tests/test_receipts.py`'s version-discipline tests. The same
-discipline applies to the audit-verdict schema, which has grown two
-further versions (1.1.0 for `unexercised-hypothesis`, 1.2.0 for
-`missing-control`) as additive, `enum`-gated changes rather than new
-files, because those were closed-vocabulary additions, not a change to
-the document's required shape.
+A 1.0.0 receipt on disk still validates as 1.0.0, and a conforming
+reader must not misread it as 2.0.0; a 2.0.0 document may not omit what
+2.0.0 requires, and a 1.0.0 document may not carry 2.0.0-only fields
+(`toolchain`, `subject`, `claim_id`, `failure_kind`, per-obligation
+`coverage`, `control`) — enforced by the schema, not by convention, and
+covered by `reference/tests/test_receipts.py`'s version-discipline
+tests. The same discipline applies to the audit-verdict schema, which
+has grown two further versions (1.1.0 for `unexercised-hypothesis`,
+1.2.0 for `missing-control`) as additive, `enum`-gated changes within
+`reference/schema/audit.schema.json` rather than as new files: each
+addition is forbidden to documents written to an earlier version and
+not required of later ones, per that schema's own version-history
+description.
