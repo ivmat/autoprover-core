@@ -16,9 +16,15 @@ precondition no explored state violated.
         exploration was exhaustive, that absence is a genuine fact about
         the system, not an artifact of not looking hard enough).
     This scenario is driven all the way through `KernelGate` ->
-    `Pipeline` -> the ratchet, to show a model-checker receipt with no
-    failing obligations still gets ratcheted like any other accepted
-    result - while never carrying a kernel-grade certificate.
+    `Pipeline` twice, because "no obligation FAILED" and "every
+    obligation was established" are different statements:
+      - with both obligations, the run is accepted by the checker (a
+        `vacuous` status is not a failure) and REFUSED by the audit
+        layer, which reads the receipt's own obligation bucket and will
+        not let a never-established obligation into the accepted set;
+      - with only the obligation that held, the same wiring ratchets the
+        result like any other acceptance - while never carrying a
+        kernel-grade certificate.
 
   - Scenario 2: a long linear counter (`0 -> 1 -> 2 -> ...`), explored
     with a bound far smaller than its reachable set. The exploration is
@@ -160,35 +166,60 @@ def scenario_1_traffic_light() -> dict:
     exploration = explore(traffic_light_system(), bound=10)
     statuses = print_obligation_results(exploration, TRAFFIC_LIGHT_OBLIGATIONS)
 
-    print("  driving through KernelGate -> Pipeline -> ratchet...")
     run_dir = EXAMPLES_DIR / "_run"
     run_dir.mkdir(exist_ok=True)
-    gate = KernelGate(
-        checker_command=model_checker_command(traffic_light_system(), TRAFFIC_LIGHT_OBLIGATIONS, bound=10),
-        checker_name="toy-bounded-checker",
-        checker_version="0.1.0",
-        kind="model-checker",
-        toolchain_id="toy-bounded-checker-toolchain",
-    )
-    pipeline = Pipeline(
-        queue=TargetQueue(run_dir / "model_check_queue.jsonl"),
-        gate=gate,
-        ratchet=Ratchet(run_dir / "model_check_ratchet.jsonl"),
-        receipts_dir=run_dir / "model_check_receipts",
-    )
     provenance = TargetProvenance(
         source="reference/examples/model_check_example.py:scenario_1",
         statement_text="the traffic light never enters a stuck state",
     )
-    result = pipeline.run_target(
-        target_id="light_never_stuck",
-        candidate_id="scenario1-v1",
-        candidate_file="traffic_light.model",
-        provenance=provenance,
-        obligation_ids=[o.id for o in TRAFFIC_LIGHT_OBLIGATIONS],
-        harness="bounded_bfs(traffic_light)",
-        bound=10,
-        env_assumptions="single traffic light, no external resets",
+
+    def drive(obligations, target_id, candidate_id):
+        gate = KernelGate(
+            checker_command=model_checker_command(
+                traffic_light_system(), obligations, bound=10
+            ),
+            checker_name="toy-bounded-checker",
+            checker_version="0.1.0",
+            kind="model-checker",
+            toolchain_id="toy-bounded-checker-toolchain",
+        )
+        pipeline = Pipeline(
+            queue=TargetQueue(run_dir / "model_check_queue.jsonl"),
+            gate=gate,
+            ratchet=Ratchet(run_dir / "model_check_ratchet.jsonl"),
+            receipts_dir=run_dir / "model_check_receipts",
+        )
+        result = pipeline.run_target(
+            target_id=target_id,
+            candidate_id=candidate_id,
+            candidate_file="traffic_light.model",
+            provenance=provenance,
+            obligation_ids=[o.id for o in obligations],
+            harness="bounded_bfs(traffic_light)",
+            bound=10,
+            env_assumptions="single traffic light, no external resets",
+        )
+        return pipeline, result
+
+    print("  driving BOTH obligations through KernelGate -> Pipeline...")
+    pipeline, result = drive(
+        TRAFFIC_LIGHT_OBLIGATIONS, "light_never_stuck_and_maintenance", "scenario1-v1",
+    )
+    print(f"  receipt.verdict={result.kernel_receipt.verdict!r} "
+          f"statuses={[o.status for o in result.kernel_receipt.obligations]}")
+    print(f"  audit verdict={result.audit_verdict.verdict!r} "
+          f"failure_reason={result.audit_verdict.failure_reason!r}")
+    print(f"  pipeline final_state={result.final_state!r}")
+    # The checker accepted the run: nothing FAILED. The audit layer still
+    # refuses it, because one obligation was never established at all.
+    assert result.kernel_receipt.verdict == "accepted"
+    assert result.audit_verdict.failure_reason == "vacuous-precondition"
+    assert result.final_state == "queued"
+    assert "light_never_stuck_and_maintenance" not in pipeline.ratchet.accepted_targets
+
+    print("  driving only the obligation that held -> ratchet...")
+    pipeline, result = drive(
+        [TRAFFIC_LIGHT_OBLIGATIONS[0]], "light_never_stuck", "scenario1-held-v1",
     )
     receipt = result.kernel_receipt
     print(f"  receipt.checker.kind={receipt.checker.kind!r} certificate={receipt.certificate!r}")
