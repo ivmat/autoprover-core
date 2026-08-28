@@ -15,6 +15,12 @@
 
   Attribution: G. L. Peterson, 1981.
 
+  SCOPE NOTE. Safety only. Peterson's algorithm is also classically credited with liveness —
+  starvation-freedom / bounded waiting — and this module proves none of it: there is no fairness
+  assumption, no progress statement, and no starvation-freedom theorem below. The only
+  non-vacuity claim made is that the critical section is genuinely reachable by one process
+  running alone.
+
   Machine-checked in Lean 4 (core language, no external libraries).
   The claim made is exactly the theorem statements below, as accepted
   by the Lean kernel; hypotheses named in the statements are assumed,

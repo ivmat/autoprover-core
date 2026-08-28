@@ -8,6 +8,11 @@
 
   Attribution: Classical closure property of conflict-serializability.
 
+  SCOPE NOTE (inherited). The schedule model, `TxId` and `ResId` come from
+  `AutoproverCorpus.Concurrency.ConflictSerializability`, so the universe here is likewise a fixed
+  two transactions and two resources, and "conflict-serializable" means that module's
+  topological-rank characterization `HasTopoOrder`, not conflict-equivalence to a serial schedule.
+
   Machine-checked in Lean 4 (core language, no external libraries).
   The claim made is exactly the theorem statements below, as accepted
   by the Lean kernel; hypotheses named in the statements are assumed,

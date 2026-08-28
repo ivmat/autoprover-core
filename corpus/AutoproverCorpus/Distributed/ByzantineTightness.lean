@@ -6,6 +6,12 @@
 
   Attribution: Classical (Pease, Shostak and Lamport, 1980).
 
+  SCOPE NOTE. The tightness half is a single concrete counterexample: f = 1 and n = 3, with the
+  node universe `[1, 2, 3]`, two size-2 quorums, and the shared node faulty. There is no
+  construction of a disagreeing instance for general f, so "3f+1 is necessary" is witnessed at
+  f = 1 only. Part (1) of the module (`still_correct_at_n_eq_3f_fixed_quorum`) IS general in f,
+  but it is the positive direction, not the tightness claim.
+
   Machine-checked in Lean 4 (core language, no external libraries).
   The claim made is exactly the theorem statements below, as accepted
   by the Lean kernel; hypotheses named in the statements are assumed,

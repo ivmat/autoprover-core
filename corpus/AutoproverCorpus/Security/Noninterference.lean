@@ -6,6 +6,12 @@
 
   Attribution: Classical (Goguen and Meseguer, 1982).
 
+  SCOPE NOTE. `Level` here is the two-domain core, `Low`/`High`: every statement below is about
+  a single Low observer purging High inputs. The general multi-domain case — an arbitrary set of
+  security domains with an interference relation between them — is the natural generalization,
+  and it is out of scope in THIS module; it is proved separately in
+  `AutoproverCorpus.Security.MultiDomainNoninterference`.
+
   Machine-checked in Lean 4 (core language, no external libraries).
   The claim made is exactly the theorem statements below, as accepted
   by the Lean kernel; hypotheses named in the statements are assumed,

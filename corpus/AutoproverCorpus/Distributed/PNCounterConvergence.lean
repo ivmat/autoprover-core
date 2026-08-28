@@ -8,6 +8,11 @@
 
   Attribution: Classical (Shapiro, Preguica, Baquero and Zawirski, 2011).
 
+  SCOPE NOTE. `PNState` is a PAIR of the G-Counter state imported from
+  `AutoproverCorpus.Distributed.GCounterConvergence`, which is fixed at three replicas, so this
+  module inherits that three-replica scope: every statement below is about a PN-Counter over
+  three replicas, not over an arbitrary replica set.
+
   Machine-checked in Lean 4 (core language, no external libraries).
   The claim made is exactly the theorem statements below, as accepted
   by the Lean kernel; hypotheses named in the statements are assumed,

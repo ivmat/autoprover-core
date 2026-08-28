@@ -9,6 +9,15 @@
 
   Attribution: Classical (Akkoyunlu, Ekanadham and Huber, 1969; Gray, 1978).
 
+  SCOPE NOTE (the schedule is fixed; the WLOG step is not formalized). `Protocol k` below fixes
+  the CANONICAL alternating message schedule: round `i` is sent A -> B when `i` is even and
+  B -> A when `i` is odd, and that parity is what the `localA`/`localB` fields encode — A may
+  read only odd-indexed deliveries, B only even-indexed ones. The impossibility is therefore
+  proved for every `k` and every protocol over THAT schedule. The textbook argument additionally
+  claims WLOG that an arbitrary `k`-message schedule reduces to the alternating one; that
+  reduction is NOT formalized here, so this module must not be cited as the impossibility over
+  an arbitrary message schedule.
+
   Machine-checked in Lean 4 (core language, no external libraries).
   The claim made is exactly the theorem statements below, as accepted
   by the Lean kernel; hypotheses named in the statements are assumed,

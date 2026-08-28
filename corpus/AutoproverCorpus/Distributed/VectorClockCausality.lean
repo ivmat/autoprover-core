@@ -7,6 +7,12 @@
 
   Attribution: Classical (Fidge, 1988; Mattern, 1989).
 
+  SCOPE NOTE. Everything below is about ONE fixed history: six events over two processes, with
+  five base edges, and a vector clock assigned to each event BY HAND (following the Fidge/Mattern
+  update rule, but not computed by a formalized version of it). The strong clock condition is
+  established for that history by finite case checking, not for an arbitrary history under an
+  arbitrary clock assignment — the general Fidge/Mattern characterization is not proved here.
+
   Machine-checked in Lean 4 (core language, no external libraries).
   The claim made is exactly the theorem statements below, as accepted
   by the Lean kernel; hypotheses named in the statements are assumed,

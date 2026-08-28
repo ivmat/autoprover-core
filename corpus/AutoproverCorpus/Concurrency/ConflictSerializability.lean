@@ -6,6 +6,21 @@
 
   Attribution: Classical (Eswaran, Gray, Lorie and Traiger, 1976; Bernstein et al.).
 
+  DEVIATION note (what `HasTopoOrder` does and does not claim). The textbook statement of this
+  theorem says a schedule is conflict-EQUIVALENT to some SERIAL schedule iff its precedence
+  graph is acyclic. This module does not define a serial schedule, and it does not define
+  conflict-equivalence between two schedules. What it proves is the graph-theoretic half:
+  `Acyclic sch ↔ HasTopoOrder sch`, where `HasTopoOrder sch` is the existence of a numeric rank
+  `rk : TxId → Nat` that strictly increases along every precedence edge. Reading a topological
+  rank as "the serial order the schedule is equivalent to" is the standard informal step; it is
+  NOT formalized here, so this module must not be cited as a proof of conflict-equivalence to a
+  serial schedule.
+
+  SCOPE note. `TxId` has exactly two transactions and `ResId` exactly two resources, so every
+  statement below is over a fixed two-transaction, two-resource universe (the schedule itself is
+  an arbitrary list of operations over that universe). The general many-transaction theorem is
+  not proved here.
+
   Machine-checked in Lean 4 (core language, no external libraries).
   The claim made is exactly the theorem statements below, as accepted
   by the Lean kernel; hypotheses named in the statements are assumed,

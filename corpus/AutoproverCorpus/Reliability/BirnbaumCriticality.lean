@@ -2,7 +2,9 @@
   AutoproverCorpus.Reliability.BirnbaumCriticality
 
   Birnbaum component criticality: a component is critical for a state vector iff flipping it
-  flips the system; critical components can be counted and ranked.
+  flips the system, and the critical components of a state vector can be counted
+  (`criticalCount`). Counting is all that is defined here: no importance ORDER over components
+  is defined and no ranking theorem is proved.
 
   Attribution: Classical (Birnbaum, 1969).
 

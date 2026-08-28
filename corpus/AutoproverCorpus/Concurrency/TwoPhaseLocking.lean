@@ -6,6 +6,12 @@
 
   Attribution: Classical (Eswaran, Gray, Lorie and Traiger, 1976).
 
+  SCOPE NOTE (inherited). The schedule model, `TxId` and `ResId` come from
+  `AutoproverCorpus.Concurrency.ConflictSerializability`, so this module inherits both of that
+  module's restrictions: the universe is a fixed two transactions and two resources, and
+  "conflict-serializable" means the topological-rank characterization `HasTopoOrder`, not
+  conflict-equivalence to a serial schedule (which is not formalized there).
+
   Machine-checked in Lean 4 (core language, no external libraries).
   The claim made is exactly the theorem statements below, as accepted
   by the Lean kernel; hypotheses named in the statements are assumed,

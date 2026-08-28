@@ -6,6 +6,15 @@
 
   Attribution: Classical (Clark and Wilson, 1987); transaction-identified form.
 
+  HYPOTHESIS NOTE (what is definitional, and what is proved). `DualControlled log t` is DEFINED
+  as "two distinct actors approved transaction `t`", so the distinctness of the two approvers is
+  part of the definition, not a consequence derived from a weaker premise. What the module proves
+  is (a) that the executable checker `checkDualControl` decides exactly that definition, for every
+  log and every transaction and with no side hypothesis beyond `DecidableEq`, and (b) that the
+  role-level reading — two distinct actors being involved SOMEWHERE in the log — does not imply
+  it, refuted by an explicit witness. Nothing here enforces separation of duty on a running
+  system; it characterizes when a log satisfies it.
+
   Machine-checked in Lean 4 (core language, no external libraries).
   The claim made is exactly the theorem statements below, as accepted
   by the Lean kernel; hypotheses named in the statements are assumed,
