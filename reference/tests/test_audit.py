@@ -14,8 +14,10 @@ from autoprover_ref.audit import (
     ObligationHypothesisEvidence,
     TargetProvenance,
     check_controls,
+    check_name_content,
     check_scope,
     check_unexercised_hypothesis,
+    check_vacuity,
     run_audit,
 )
 from autoprover_ref.receipts import (
@@ -93,6 +95,29 @@ class VacuityCheckTests(unittest.TestCase):
         )
         verdict = run_audit("unconditional_target", "cand1", provenance)
         self.assertEqual(verdict.verdict, "pass")
+
+    def test_details_carry_judged_on_both_outcomes(self):
+        # ADR-004 says every audit-details block carries `judged`.
+        # check_vacuity never abstains - it always either finds a missing
+        # witness or confirms preconditions were checked - so both of its
+        # outcomes must say so with `judged: True`.
+        flagged_ok, flagged_details = check_vacuity(TargetProvenance(
+            source="synthetic",
+            statement_text="forall (l : List Nat), length l < 0 -> Sorted l",
+            preconditions=("length l < 0",),
+            non_vacuity_witness=None,
+        ))
+        self.assertFalse(flagged_ok)
+        self.assertIn("judged", flagged_details)
+        self.assertTrue(flagged_details["judged"])
+
+        clean_ok, clean_details = check_vacuity(TargetProvenance(
+            source="synthetic",
+            statement_text="forall (n : Nat), n + 0 = n",
+        ))
+        self.assertTrue(clean_ok)
+        self.assertIn("judged", clean_details)
+        self.assertTrue(clean_details["judged"])
 
 
 class UnexercisedHypothesisTests(unittest.TestCase):
@@ -300,6 +325,32 @@ class NameContentMismatchTests(unittest.TestCase):
             ["vacuity", "obligation_status", "unexercised_hypothesis", "name_content",
              "scope", "controls"],
         )
+
+    def test_details_carry_judged_alongside_the_per_keyword_list(self):
+        # ADR-004 says every audit-details block carries `judged`.
+        # check_name_content's own `keywords_judged` is a per-keyword
+        # LIST (which claim keywords were even judgeable), a different
+        # and more granular thing than the whole-check `judged` boolean
+        # every other check reports - both belong on the block, not one
+        # instead of the other.
+        mismatch_ok, mismatch_details = check_name_content(TargetProvenance(
+            source="synthetic",
+            statement_text="forall (l : List Nat), length (myFunc l) = length l",
+            claim_keywords=("sorted",),
+        ))
+        self.assertFalse(mismatch_ok)
+        self.assertIn("judged", mismatch_details)
+        self.assertTrue(mismatch_details["judged"])
+
+        abstain_ok, abstain_details = check_name_content(TargetProvenance(
+            source="synthetic",
+            statement_text="forall (n : Nat), n = n",
+            claim_keywords=("correct",),  # not in the lexicon
+        ))
+        self.assertTrue(abstain_ok)
+        self.assertIn("judged", abstain_details)
+        self.assertFalse(abstain_details["judged"])
+        self.assertEqual(abstain_details["keywords_judged"], [])
 
     def test_vacuity_checked_before_name_content_short_circuits(self):
         provenance = TargetProvenance(

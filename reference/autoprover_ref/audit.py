@@ -231,12 +231,21 @@ def check_vacuity(provenance: TargetProvenance) -> tuple[bool, dict]:
     artifact ARCHITECTURE.md §5 calls for ("the precondition is
     satisfiable, the interesting case is actually exercised").
     """
+    # Unlike the other five checks, this one never abstains: given any
+    # provenance it always either finds a missing witness or confirms
+    # the declared preconditions were checked, so `judged` is
+    # unconditionally True on both outcomes.
     if provenance.preconditions and not provenance.non_vacuity_witness:
         return False, {
             "check": "vacuity",
+            "judged": True,
             "missing_witness_for": list(provenance.preconditions),
         }
-    return True, {"check": "vacuity", "preconditions_checked": list(provenance.preconditions)}
+    return True, {
+        "check": "vacuity",
+        "judged": True,
+        "preconditions_checked": list(provenance.preconditions),
+    }
 
 
 def check_unexercised_hypothesis(provenance: TargetProvenance) -> tuple[bool, dict]:
@@ -408,9 +417,19 @@ def check_name_content(provenance: TargetProvenance) -> tuple[bool, dict]:
         judged.append(keyword)
         if not any(signal.lower() in lowered for signal in signals):
             mismatches.append({"claim_keyword": keyword, "expected_any_of": list(signals)})
+    # `keywords_judged` is the finer-grained, per-keyword account (which
+    # claim keywords were even in the lexicon to judge); `judged` is the
+    # same whole-check boolean every other check's block carries - True
+    # iff at least one keyword was actually judgeable, so an empty
+    # `keywords_judged` (nothing recognized) reads as an abstain here too.
     if mismatches:
-        return False, {"check": "name_content", "mismatches": mismatches, "keywords_judged": judged}
-    return True, {"check": "name_content", "keywords_judged": judged}
+        return False, {
+            "check": "name_content",
+            "mismatches": mismatches,
+            "judged": bool(judged),
+            "keywords_judged": judged,
+        }
+    return True, {"check": "name_content", "judged": bool(judged), "keywords_judged": judged}
 
 
 # Signals that a target's declared `claimed_scope` asserts generality —
