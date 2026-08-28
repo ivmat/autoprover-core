@@ -84,7 +84,7 @@ The hypotheses above are the local half of this. The standing assumptions
 the whole apparatus rests on — kernel soundness, toolchain semantics,
 receipt authenticity, and the fact that no such list can ever be complete —
 are enumerated, each with what would falsify it, in
-[ASSUMPTIONS.md](ASSUMPTIONS.md).
+[ASSUMPTIONS.md](../ASSUMPTIONS.md).
 
 ## 6. Finite and bounded by construction
 
