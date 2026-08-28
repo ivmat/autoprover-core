@@ -304,14 +304,19 @@ class PipelineRatchetBoundaryTests(TempDirCase):
         )
 
     def test_accepted_model_checker_receipt_flows_into_ratchet(self):
-        pipeline = self._pipeline(traffic_light_system(), TRAFFIC_LIGHT_OBLIGATIONS, bound=10)
+        # Only the unconditional obligation, which comes back `held`.
+        # The maintenance obligation of the full set comes back
+        # `vacuous` on this system, and a vacuous obligation is refused
+        # at the audit layer - see the next test.
+        obligations = [TRAFFIC_LIGHT_OBLIGATIONS[0]]
+        pipeline = self._pipeline(traffic_light_system(), obligations, bound=10)
         provenance = TargetProvenance(
             source="synthetic", statement_text="the traffic light never gets stuck",
         )
         result = pipeline.run_target(
             target_id="light_never_stuck", candidate_id="cand1",
             candidate_file="ignored.model", provenance=provenance,
-            obligation_ids=[o.id for o in TRAFFIC_LIGHT_OBLIGATIONS],
+            obligation_ids=[o.id for o in obligations],
             harness="bounded_bfs(traffic_light)", bound=10,
             env_assumptions="single traffic light, no external resets",
         )
@@ -328,6 +333,32 @@ class PipelineRatchetBoundaryTests(TempDirCase):
         self.assertEqual(stored_receipt.harness, "bounded_bfs(traffic_light)")
         self.assertEqual(stored_receipt.bound, 10)
         self.assertIsNotNone(stored_receipt.env_assumptions)
+
+    def test_vacuous_obligation_model_checker_receipt_never_reaches_ratchet(self):
+        # `maintenance_mode_is_safe`'s precondition fires in no state of
+        # the (exhaustively explored) system, so the checker reports it
+        # `vacuous` while accepting the run overall - nothing FAILED.
+        # An accepted receipt whose own obligation bucket says an
+        # obligation was never established must not reach the ratchet.
+        pipeline = self._pipeline(traffic_light_system(), TRAFFIC_LIGHT_OBLIGATIONS, bound=10)
+        provenance = TargetProvenance(
+            source="synthetic", statement_text="the traffic light never gets stuck",
+        )
+        result = pipeline.run_target(
+            target_id="light_never_stuck", candidate_id="cand1",
+            candidate_file="ignored.model", provenance=provenance,
+            obligation_ids=[o.id for o in TRAFFIC_LIGHT_OBLIGATIONS],
+            harness="bounded_bfs(traffic_light)", bound=10,
+            env_assumptions="single traffic light, no external resets",
+        )
+        self.assertEqual(result.kernel_receipt.verdict, "accepted")
+        self.assertEqual(
+            [o.status for o in result.kernel_receipt.obligations], ["held", "vacuous"],
+        )
+        self.assertEqual(result.audit_verdict.verdict, "fail")
+        self.assertEqual(result.audit_verdict.failure_reason, "vacuous-precondition")
+        self.assertEqual(result.final_state, State.QUEUED.value)
+        self.assertNotIn("light_never_stuck", pipeline.ratchet.accepted_targets)
 
     def test_failed_obligation_model_checker_receipt_never_reaches_ratchet(self):
         pipeline = self._pipeline(traffic_light_system(buggy=True), TRAFFIC_LIGHT_OBLIGATIONS, bound=10)

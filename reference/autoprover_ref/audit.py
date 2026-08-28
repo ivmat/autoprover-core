@@ -3,8 +3,8 @@
 A proof checker answers exactly one question: does this proof term
 establish this formal statement, given these definitions? It answers
 nothing about whether that statement is the theorem anyone wanted, or
-whether it says anything at all. This module implements four structural
-checks that catch what the kernel structurally cannot see:
+whether it says anything at all. This module implements six checks that
+catch what the kernel structurally cannot see:
 
   (a) vacuity  — does the target's provenance ship evidence that its
       declared preconditions can actually fire, or could the "theorem"
@@ -36,8 +36,15 @@ checks that catch what the kernel structurally cannot see:
       an oracle wired to a value it always computes correctly, passes
       every ordinary run indistinguishably from a real one; only a
       deliberately-broken run tells the two apart.
+  (f) obligation status — does the CURRENT candidate's receipt report
+      every obligation as `held`, or does the checker's own per-obligation
+      bucket say one was `vacuous` or `not-exercised`? A run can be
+      accepted overall and still say, obligation by obligation, that
+      nothing was established there; the accepted set must not be
+      reachable from such a receipt. Unlike its five neighbours this one
+      is not a heuristic — it reads what the checker itself reported.
 
-All five checks are HONEST HEURISTICS, not sound verification. They
+Checks (a)-(e) are HONEST HEURISTICS, not sound verification. They
 operate on provenance metadata, statement *text*, reported enumeration
 counts, and the shape of an evidence set, not on formal semantics: "no
 non-vacuity witness recorded" proves the provenance record didn't
@@ -49,8 +56,10 @@ text" is a lexical check, not a proof that the name overclaims; "no
 quantified binder found" is a syntactic pattern match, not a proof the
 statement is actually about a single instance; "no observed-red mutation
 control in this evidence set" says the set on offer contains no such
-artifact, not that the oracle is in fact unfalsifiable. A
-target can pass all five checks and
+artifact, not that the oracle is in fact unfalsifiable. Check (f) is the
+exception: it reports the checker's own per-obligation statuses, so it is
+as sound as the receipt it reads and no sounder. A
+target can pass all six checks and
 still be wrong in a way a human would catch immediately, and a target can
 fail one on a false positive (an unusual but legitimate phrasing). This is
 exactly the trade-off ARCHITECTURE.md §7 draws between a kernel verdict
@@ -74,6 +83,7 @@ __all__ = [
     "ObligationHypothesisEvidence",
     "TargetProvenance",
     "check_vacuity",
+    "check_obligation_statuses",
     "check_unexercised_hypothesis",
     "check_name_content",
     "check_scope",
@@ -316,6 +326,71 @@ def check_unexercised_hypothesis(provenance: TargetProvenance) -> tuple[bool, di
     }
 
 
+def check_obligation_statuses(receipt: Optional[Receipt]) -> tuple[bool, dict]:
+    """Heuristic (f) — and the one check in this module that is not a
+    heuristic at all. It reads what the checker itself said, per
+    obligation, on the receipt for THIS candidate: an obligation reported
+    `vacuous` (its precondition held in no state of an exhaustively
+    explored space) or `not-exercised` (the same, on a bound-truncated
+    one) was never established, and the run's overall verdict does not
+    overrule the checker's own account of it.
+
+    This closes the gap between a checker's obligation bucket and the
+    ratchet. `model_checker.model_checker_command` deliberately reports
+    an overall `accepted` for a run in which some obligation came back
+    vacuous — collapsing those into an overall failure would defeat the
+    point of surfacing them as distinct statuses — and leaves them
+    "visible per-obligation for a caller to act on directly". THIS is
+    that caller. Without this check, "accepted receipt + vacuous
+    obligation + audit pass" is a reachable path into the accepted set,
+    which is precisely the failure mode ARCHITECTURE.md §5 says the audit
+    layer exists to stop.
+
+    Abstains (passes, judged=False) when no receipt is supplied: this
+    module never judges evidence it was not shown, exactly as
+    `check_controls` abstains on an unsupplied receipt set.
+
+    Scope limit, stated rather than implied: an obligation reported
+    `failed` on a receipt whose overall verdict is `accepted` is a
+    checker self-contradiction, not a vacuity finding. It is recorded in
+    the details under `contradictory` so it cannot pass unseen, but this
+    check does not convert it into a vacuity verdict — the audit's
+    closed failure-reason vocabulary has no code for it, and reusing a
+    vacuity code for a different finding is the kind of category collapse
+    this package exists to avoid.
+    """
+    if receipt is None:
+        return True, {
+            "check": "obligation_status",
+            "judged": False,
+            "reason": "no kernel receipt supplied to judge obligation statuses",
+        }
+
+    statuses = {o.id: o.status for o in receipt.obligations}
+    unestablished = [
+        {"obligation_id": o.id, "status": o.status}
+        for o in receipt.obligations
+        if o.status in ("vacuous", "not-exercised")
+    ]
+    contradictory = [
+        {"obligation_id": o.id, "status": o.status}
+        for o in receipt.obligations
+        if o.status == "failed" and receipt.verdict == "accepted"
+    ]
+
+    details = {
+        "check": "obligation_status",
+        "judged": True,
+        "receipt_verdict": receipt.verdict,
+        "obligation_statuses": statuses,
+        "contradictory": contradictory,
+    }
+    if unestablished:
+        details["unestablished"] = unestablished
+        return False, details
+    return True, details
+
+
 def check_name_content(provenance: TargetProvenance) -> tuple[bool, dict]:
     """Heuristic (c). For each declared claim keyword with a judgeable
     entry in `CLAIM_KEYWORD_SIGNALS`, flags a mismatch if none of its
@@ -549,12 +624,23 @@ def run_audit(
     candidate_id: str,
     provenance: TargetProvenance,
     receipts: Optional[Sequence[Receipt]] = None,
+    *,
+    receipt: Optional[Receipt] = None,
 ) -> AuditVerdict:
-    """Run all five structural checks in order and produce a single
-    structured AuditVerdict. The order is vacuity, then unexercised
-    hypothesis, then name/content, then scope, then controls, and the
-    first failing check short-circuits and is reported — never multiple
-    reasons flattened into one ambiguous verdict.
+    """Run all six structural checks in order and produce a single
+    structured AuditVerdict. The order is vacuity, then obligation
+    statuses, then unexercised hypothesis, then name/content, then scope,
+    then controls, and the first failing check short-circuits and is
+    reported — never multiple reasons flattened into one ambiguous
+    verdict.
+
+    Note the two receipt parameters, which are different things.
+    `receipt` (keyword-only) is the CURRENT candidate's kernel receipt —
+    the artifact this audit is about, whose per-obligation statuses
+    `check_obligation_statuses` reads. `receipts` is the evidence SET
+    gathered under this claim across many runs, which `check_controls`
+    searches. Both default to None and both make their check abstain
+    rather than judge evidence it was never shown.
 
     Why that order: the two hypothesis checks come first because they ask
     whether the claim has any content at all, and a claim that never
@@ -574,6 +660,16 @@ def run_audit(
     default) makes `check_controls` abstain; see its docstring for why
     that differs from passing an empty set.
     """
+    if receipt is not None and (
+        receipt.target_id != target_id or receipt.candidate_id != candidate_id
+    ):
+        raise ValueError(
+            f"the receipt handed to run_audit is about "
+            f"({receipt.target_id!r}, {receipt.candidate_id!r}), but the audit is of "
+            f"({target_id!r}, {candidate_id!r}) — auditing one candidate against another's "
+            f"receipt is a wiring error, and passing it would be a verdict about nothing"
+        )
+
     vacuity_ok, vacuity_details = check_vacuity(provenance)
     if not vacuity_ok:
         return AuditVerdict(
@@ -582,6 +678,17 @@ def run_audit(
             verdict="fail",
             failure_reason="vacuous-precondition",
             details=vacuity_details,
+            produced_at=now_iso(),
+        )
+
+    obligation_ok, obligation_details = check_obligation_statuses(receipt)
+    if not obligation_ok:
+        return AuditVerdict(
+            target_id=target_id,
+            candidate_id=candidate_id,
+            verdict="fail",
+            failure_reason="vacuous-precondition",
+            details=obligation_details,
             produced_at=now_iso(),
         )
 
@@ -636,9 +743,11 @@ def run_audit(
         failure_reason=None,
         details={
             "checks_run": [
-                "vacuity", "unexercised_hypothesis", "name_content", "scope", "controls",
+                "vacuity", "obligation_status", "unexercised_hypothesis", "name_content",
+                "scope", "controls",
             ],
             "vacuity": vacuity_details,
+            "obligation_status": obligation_details,
             "unexercised_hypothesis": unexercised_details,
             "name_content": name_content_details,
             "scope": scope_details,

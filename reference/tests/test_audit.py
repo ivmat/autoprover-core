@@ -297,7 +297,8 @@ class NameContentMismatchTests(unittest.TestCase):
         self.assertEqual(verdict.details["name_content"]["keywords_judged"], [])
         self.assertEqual(
             verdict.details["checks_run"],
-            ["vacuity", "unexercised_hypothesis", "name_content", "scope", "controls"],
+            ["vacuity", "obligation_status", "unexercised_hypothesis", "name_content",
+             "scope", "controls"],
         )
 
     def test_vacuity_checked_before_name_content_short_circuits(self):
@@ -536,6 +537,80 @@ class MissingControlTests(unittest.TestCase):
             self.contract_provenance(claim_grade="pretty-sure")
 
 
+class ObligationStatusTests(unittest.TestCase):
+    """The audit reads the CURRENT receipt's obligation statuses. A
+    checker that reports an obligation as `vacuous` or `not-exercised`
+    has said the obligation was never established; the run's overall
+    `accepted` verdict does not overrule that, and the audit must not
+    pass a target whose own receipt says so."""
+
+    @staticmethod
+    def provenance() -> TargetProvenance:
+        return TargetProvenance(
+            source="synthetic",
+            statement_text="forall (s : State), Ready s -> Safe s",
+            claim_keywords=(),
+            preconditions=(),
+        )
+
+    @staticmethod
+    def receipt_with(*statuses: str, verdict="accepted") -> Receipt:
+        return Receipt(
+            target_id="t",
+            candidate_id="c",
+            checker=Checker(kind="model-checker", name="checker-x", version="0.1.0"),
+            verdict=verdict,
+            certificate=None,
+            harness="harness_x",
+            bound=8,
+            env_assumptions="synthetic",
+            obligations=tuple(
+                Obligation(id=f"o{i}", status=status) for i, status in enumerate(statuses)
+            ),
+            produced_at=now_iso(),
+            schema_version="1.0.0",
+        )
+
+    def test_passes_when_every_obligation_held(self):
+        verdict = run_audit(
+            "t", "c", self.provenance(), receipt=self.receipt_with("held", "held"),
+        )
+        self.assertEqual(verdict.verdict, "pass")
+        self.assertTrue(verdict.details["obligation_status"]["judged"])
+
+    def test_fails_on_a_vacuous_obligation_even_though_the_checker_accepted(self):
+        verdict = run_audit(
+            "t", "c", self.provenance(), receipt=self.receipt_with("held", "vacuous"),
+        )
+        self.assertEqual(verdict.verdict, "fail")
+        self.assertEqual(verdict.failure_reason, "vacuous-precondition")
+        self.assertEqual(verdict.details["receipt_verdict"], "accepted")
+        self.assertEqual(
+            verdict.details["unestablished"], [{"obligation_id": "o1", "status": "vacuous"}],
+        )
+
+    def test_fails_on_a_not_exercised_obligation(self):
+        verdict = run_audit(
+            "t", "c", self.provenance(), receipt=self.receipt_with("not-exercised"),
+        )
+        self.assertEqual(verdict.failure_reason, "vacuous-precondition")
+        self.assertEqual(verdict.details["unestablished"][0]["status"], "not-exercised")
+
+    def test_abstains_when_no_receipt_is_supplied(self):
+        verdict = run_audit("t", "c", self.provenance())
+        self.assertEqual(verdict.verdict, "pass")
+        self.assertFalse(verdict.details["obligation_status"]["judged"])
+
+    def test_refuses_a_receipt_about_another_target_or_candidate(self):
+        # Auditing target/candidate X against Y's receipt is not a
+        # judgment about anything - it is a wiring bug, and a silent
+        # pass is the worst possible response to one.
+        with self.assertRaises(ValueError):
+            run_audit("other", "c", self.provenance(), receipt=self.receipt_with("held"))
+        with self.assertRaises(ValueError):
+            run_audit("t", "other", self.provenance(), receipt=self.receipt_with("held"))
+
+
 class CheckOrderingTests(unittest.TestCase):
     """The control check runs LAST: it asks about the evidence set, not
     about what the statement says, and every question about the statement
@@ -601,7 +676,7 @@ class CheckOrderingTests(unittest.TestCase):
         verdict = run_audit("t", "c", self.provenance(), [])
         self.assertEqual(verdict.failure_reason, "missing-control")
 
-    def test_passing_audit_records_all_five_checks_in_order(self):
+    def test_passing_audit_records_all_six_checks_in_order(self):
         receipts = [evidence_receipt(control=Control(
             kind="mutation", expectation="red", observed="red", of_claim="claim-1",
         ))]
@@ -609,5 +684,6 @@ class CheckOrderingTests(unittest.TestCase):
         self.assertEqual(verdict.verdict, "pass")
         self.assertEqual(
             verdict.details["checks_run"],
-            ["vacuity", "unexercised_hypothesis", "name_content", "scope", "controls"],
+            ["vacuity", "obligation_status", "unexercised_hypothesis", "name_content",
+             "scope", "controls"],
         )

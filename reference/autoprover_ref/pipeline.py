@@ -144,7 +144,15 @@ class Pipeline:
                 accepted_entry=None,
             )
 
-        audit_verdict = run_audit(target_id, candidate_id, provenance, claim_receipts)
+        # The audit is handed THIS run's receipt, not just the target's
+        # provenance: an obligation the checker itself reported as
+        # `vacuous` or `not-exercised` must be able to fail the audit,
+        # and it cannot if the audit never sees the receipt that says so.
+        # Without this, "receipt accepted + obligation vacuous + audit
+        # pass + ratchet admission" is a reachable path.
+        audit_verdict = run_audit(
+            target_id, candidate_id, provenance, claim_receipts, receipt=receipt,
+        )
         write_audit(self.receipts_dir / f"{target_id}.{candidate_id}.audit.json", audit_verdict)
         state = self.queue.record_audit(target_id, audit_verdict)
 
