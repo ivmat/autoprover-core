@@ -99,7 +99,7 @@ cloned this repository:
       "status": "held"
     }
   ],
-  "produced_at": "2026-08-19T09:14:10.764368+00:00"
+  "produced_at": "2026-08-28T16:11:48.569028+00:00"
 }
 ```
 
@@ -114,8 +114,15 @@ and its audit verdict (`genuine.genuine-v1.audit.json`) — `pass`, with
   "verdict": "pass",
   "failure_reason": null,
   "details": {
-    "checks_run": ["vacuity", "unexercised_hypothesis", "name_content", "scope", "controls"],
+    "checks_run": [
+      "vacuity", "obligation_status", "unexercised_hypothesis", "name_content",
+      "scope", "controls"
+    ],
     "vacuity": {"check": "vacuity", "preconditions_checked": ["0 < l.length"]},
+    "obligation_status": {
+      "check": "obligation_status", "judged": true, "receipt_verdict": "accepted",
+      "obligation_statuses": {"genuine": "held"}, "contradictory": []
+    },
     "unexercised_hypothesis": {
       "check": "unexercised_hypothesis", "judged": false,
       "reason": "no enumerated-obligation evidence recorded"
@@ -124,7 +131,7 @@ and its audit verdict (`genuine.genuine-v1.audit.json`) — `pass`, with
     "scope": {"check": "scope", "judged": false, "reason": "no claimed_scope declared"},
     "controls": {"check": "controls", "judged": false, "reason": "no claim_grade declared"}
   },
-  "produced_at": "2026-08-19T09:14:10.769480+00:00"
+  "produced_at": "2026-08-28T16:11:48.575175+00:00"
 }
 ```
 
@@ -145,7 +152,7 @@ difference becomes a structured, machine-readable fact:
     "check": "vacuity",
     "missing_witness_for": ["l.length < 0"]
   },
-  "produced_at": "2026-08-19T09:14:10.872570+00:00"
+  "produced_at": "2026-08-28T16:11:48.684173+00:00"
 }
 ```
 

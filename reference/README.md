@@ -193,13 +193,15 @@ the unexercised hypothesis was flagged.
   from the prover's own claim. This is enforced by *not giving
   `KernelGate.check` any other input to base a verdict on* — there is
   no code path that reads a "prover says this is correct" flag.
-- `audit.py`'s five checks (vacuity, unexercised hypothesis,
+- `audit.py`'s five HEURISTIC checks (vacuity, unexercised hypothesis,
   name/content, scope, and missing control) are explicitly documented, in
   the module docstring and in code comments, as structural heuristics
   operating on provenance text/metadata, reported enumeration counts and
   the shape of an evidence set — never as
-  sound verification. A target can pass all
-  five checks and still be wrong in a way a human would catch
+  sound verification. (Its sixth check, obligation status, is not a
+  heuristic: it reports what the checker itself said, per obligation, on
+  the receipt under audit.) A target can pass all
+  six checks and still be wrong in a way a human would catch
   immediately; that trade-off is the one ARCHITECTURE.md §7 draws
   between a kernel verdict (independently re-derivable) and an audit
   verdict (a judgment). The scope check (`audit.check_scope`) in
