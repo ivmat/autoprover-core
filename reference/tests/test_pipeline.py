@@ -11,7 +11,14 @@ from pathlib import Path
 from autoprover_ref.audit import TargetProvenance
 from autoprover_ref.kernel_gate import CheckerResult, KernelGate
 from autoprover_ref.pipeline import Pipeline
-from autoprover_ref.queue import State, TargetQueue
+from autoprover_ref.queue import (
+    AttemptStarted,
+    CandidateArtifact,
+    InvalidTransition,
+    State,
+    TargetEntry,
+    TargetQueue,
+)
 from autoprover_ref.ratchet import Ratchet
 from autoprover_ref.receipts import Subject, Tool, Toolchain
 
@@ -231,6 +238,70 @@ class CheckerErrorIsNotAGhostChaseTests(TempDirCase):
         reason = requeues[0]["evidence"]["reason"]
         self.assertNotIn("rejected", reason)
         self.assertIn("unsupported-construct", reason)
+
+
+class ProverIntegrationGuidanceTests(TempDirCase):
+    """Pins down what ARCHITECTURE.md, EXTENDING.md and pipeline.py's own
+    module docstring now say about wiring a real prover: `run_target`
+    owns the enqueue/start_attempt/record_candidate transitions itself,
+    so a caller hands it the already-produced candidate file directly —
+    it must NOT pre-record the candidate on the queue first."""
+
+    def _make_pipeline(self) -> Pipeline:
+        gate = KernelGate(
+            checker_command=fake_accepting_checker,
+            checker_name="fake-lean",
+            checker_version="0.0.0",
+            kind="kernel",
+            toolchain_id="fake-toolchain",
+        )
+        return Pipeline(
+            queue=TargetQueue(self.tmp_path("queue.jsonl")),
+            gate=gate,
+            ratchet=Ratchet(self.tmp_path("ratchet.jsonl")),
+            receipts_dir=self.tmp_path("receipts"),
+        )
+
+    def test_pre_recording_the_candidate_before_run_target_is_refused(self):
+        # This is the flow the docs used to (wrongly) recommend: record
+        # the candidate on the queue yourself, then call run_target.
+        # run_target's own start_attempt/record_candidate calls require
+        # the target still be `queued`, so a caller that got there first
+        # leaves run_target raising InvalidTransition, not a receipt.
+        pipeline = self._make_pipeline()
+        provenance = TargetProvenance(
+            source="synthetic", statement_text="forall (n : Nat), n + 0 = n",
+        )
+        pipeline.queue.enqueue(
+            "pre-recorded",
+            TargetEntry(statement=provenance.statement_text, provenance={}),
+        )
+        pipeline.queue.start_attempt(
+            "pre-recorded", AttemptStarted(attempt_id="cand1", prover_name="external"),
+        )
+        pipeline.queue.record_candidate(
+            "pre-recorded", CandidateArtifact(candidate_id="cand1", artifact_path="x.lean"),
+        )
+        with self.assertRaises(InvalidTransition):
+            pipeline.run_target(
+                target_id="pre-recorded", candidate_id="cand1",
+                candidate_file="x.lean", provenance=provenance,
+            )
+
+    def test_calling_run_target_directly_with_the_candidate_file_is_the_supported_flow(self):
+        # The corrected guidance: a prover integration just calls
+        # run_target with the produced candidate file - no pre-recording,
+        # not even the initial enqueue - run_target does all of it.
+        pipeline = self._make_pipeline()
+        provenance = TargetProvenance(
+            source="synthetic", statement_text="forall (n : Nat), n + 0 = n",
+        )
+        self.assertIsNone(pipeline.queue.state_of("direct"))
+        result = pipeline.run_target(
+            target_id="direct", candidate_id="cand1",
+            candidate_file="direct.lean", provenance=provenance,
+        )
+        self.assertEqual(result.final_state, State.ACCEPTED.value)
 
 
 if __name__ == "__main__":

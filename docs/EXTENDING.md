@@ -29,13 +29,22 @@ Follow a single target from idea to accepted, matching the sections of
 3. **Prover (§3).** A prover proposes a candidate proof. The reference
    implementation contains no prover and no seam for one: `pipeline.py`
    takes an already-produced candidate file, exactly as if a prover
-   upstream had just finished. Wiring in a real prover means recording the
-   candidate on the queue yourself (`queue.record_candidate`, or
-   `queue.record_no_candidate`) before calling `Pipeline.run_target`, or
-   adding a `ProverCommand` seam analogous to the kernel gate's
-   `CheckerCommand`. Nothing about soundness depends on that choice — the
-   point of the architecture is that soundness never depends on how
-   plausible a candidate looks, only on what the gate downstream decides.
+   upstream had just finished, and `Pipeline.run_target` itself owns the
+   queue transitions that get a target there — it enqueues the target if
+   needed, starts the attempt, and records the candidate, unconditionally,
+   before the kernel gate ever runs. Wiring in a real prover means
+   producing the candidate file and calling `Pipeline.run_target` with it
+   directly, not pre-recording the candidate on the queue first:
+   `run_target`'s own `queue.start_attempt`/`queue.record_candidate` calls
+   require the target still be `queued`, and raise `InvalidTransition` on
+   one a caller already advanced past that state. A prover that needs
+   `queue.record_no_candidate`'s explicit "no candidate produced" outcome
+   has to drive the queue directly instead of calling `run_target`, or the
+   pipeline could grow a `ProverCommand` seam analogous to the kernel
+   gate's `CheckerCommand` to make that a supported path. Nothing about
+   soundness depends on that choice — the point of the architecture is
+   that soundness never depends on how plausible a candidate looks, only
+   on what the gate downstream decides.
 4. **Kernel gate (§4).** The candidate is checked by a sound oracle
    (`kernel_gate.py`). For a proof kernel the receipt carries a
    re-runnable certificate; for a bounded model checker

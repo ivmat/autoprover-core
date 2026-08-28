@@ -11,10 +11,21 @@ depends on how the candidate was produced (that is the entire point of
 §3's contract: a candidate is only ever an *input* to the kernel gate,
 never a verdict). `Pipeline.run_target` takes an already-produced
 candidate file, exactly as if a prover component upstream had just
-finished; wiring in a real prover means calling `queue.record_candidate`
-(or `queue.record_no_candidate`) yourself before invoking
-`Pipeline.run_target`, or extending this module with a `ProverCommand`
-seam analogous to `kernel_gate.CheckerCommand`.
+finished, and OWNS the queue transitions that get a target there: it
+enqueues the target if needed, starts the attempt, and records the
+candidate itself — all three unconditionally, before the kernel gate
+ever runs (see `run_target`'s body). Wiring in a real prover therefore
+means producing the candidate file and then calling `Pipeline.run_target`
+with it directly; a caller must NOT pre-record the candidate on the
+queue first (via `queue.record_candidate` or `queue.start_attempt`) —
+those calls require the target still be `queued`, and `run_target`'s own
+identical calls would then find it already past that state and raise
+`InvalidTransition`. A prover that needs `queue.record_no_candidate`'s
+explicit "no candidate produced" outcome, or finer control over the
+attempt/candidate evidence than `run_target` takes as parameters, has to
+drive `queue`/`kernel_gate`/`audit`/`ratchet` directly instead of calling
+`run_target` — or this module could grow a `ProverCommand` seam
+analogous to `kernel_gate.CheckerCommand` to make that a supported path.
 """
 
 from __future__ import annotations

@@ -292,9 +292,18 @@ observed-red control, and the current receipt's per-obligation statuses
 explicit, logged removal path (§6). It is deliberately a skeleton. There
 is no prover seam at all: `Pipeline.run_target` takes an already-produced
 candidate file, exactly as if a prover component upstream had just
-finished, so wiring in a real prover means recording the candidate on the
-queue yourself before calling it, or extending the pipeline with a
-`ProverCommand` seam analogous to the kernel gate's `CheckerCommand`. And
+finished, and it owns the queue transitions that get a target there — it
+enqueues the target if needed, starts the attempt, and records the
+candidate itself, unconditionally, before the kernel gate ever runs. So
+wiring in a real prover means producing the candidate file and calling
+`Pipeline.run_target` with it directly, never pre-recording the
+candidate on the queue first (`run_target`'s own transitions require the
+target still be `queued`, and raise `InvalidTransition` on one that
+already has a recorded candidate). A prover that needs finer-grained
+control — an explicit "no candidate produced" outcome, say — has to
+drive the queue directly instead of calling `run_target`, or the
+pipeline could grow a `ProverCommand` seam analogous to the kernel
+gate's `CheckerCommand` to make that a supported path. And
 five of the six audit checks are honestly labelled heuristics rather than
 sound procedures — the sixth is not a heuristic, it reads the statuses the
 checker itself reported. The point of the skeleton is that the
