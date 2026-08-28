@@ -224,6 +224,71 @@ class RecheckTests(TempDirCase):
         self.assertEqual(ratchet.entry_for("t1").candidate_id, "c2")
         self.assertNotIn("t1", ratchet.marked_for_recheck)
 
+    def test_recheck_confirming_one_dependency_leaves_others_outstanding(self):
+        # A target marked for two independent dependency changes must
+        # keep the second mark after the first is confirmed - confirming
+        # dep-A is not evidence about dep-B.
+        ratchet = Ratchet(self.tmp_path("ratchet.jsonl"))
+        ratchet.accept(accepted_receipt(target_id="t1", candidate_id="c1"),
+                       pass_audit(target_id="t1", candidate_id="c1"))
+        ratchet.recheck_dependents("dep-A", ["t1"])
+        ratchet.recheck_dependents("dep-B", ["t1"])
+
+        event = ratchet.record_recheck_result(
+            "t1", "dep-A",
+            accepted_receipt(target_id="t1", candidate_id="c2"),
+            pass_audit(target_id="t1", candidate_id="c2"),
+        )
+        self.assertIsNone(event)
+        self.assertIn("t1", ratchet.accepted_targets)
+        # dep-B is still outstanding: the target is still marked, and an
+        # unrelated dependency still cannot discharge it.
+        self.assertIn("t1", ratchet.marked_for_recheck)
+        with self.assertRaises(RatchetError):
+            ratchet.record_recheck_result(
+                "t1", "some_other_dep",
+                accepted_receipt(target_id="t1", candidate_id="c3"),
+                pass_audit(target_id="t1", candidate_id="c3"),
+            )
+
+        # Confirming dep-B itself clears the remaining mark.
+        event2 = ratchet.record_recheck_result(
+            "t1", "dep-B",
+            accepted_receipt(target_id="t1", candidate_id="c3"),
+            pass_audit(target_id="t1", candidate_id="c3"),
+        )
+        self.assertIsNone(event2)
+        self.assertNotIn("t1", ratchet.marked_for_recheck)
+
+    def test_partial_recheck_confirmation_survives_replay(self):
+        log_path = self.tmp_path("ratchet.jsonl")
+        r1 = Ratchet(log_path)
+        r1.accept(accepted_receipt(target_id="t1", candidate_id="c1"),
+                  pass_audit(target_id="t1", candidate_id="c1"))
+        r1.recheck_dependents("dep-A", ["t1"])
+        r1.recheck_dependents("dep-B", ["t1"])
+        r1.record_recheck_result(
+            "t1", "dep-A",
+            accepted_receipt(target_id="t1", candidate_id="c2"),
+            pass_audit(target_id="t1", candidate_id="c2"),
+        )
+
+        r2 = Ratchet(log_path)
+        self.assertIn("t1", r2.marked_for_recheck)
+        with self.assertRaises(RatchetError):
+            r2.record_recheck_result(
+                "t1", "dep-A",
+                accepted_receipt(target_id="t1", candidate_id="c3"),
+                pass_audit(target_id="t1", candidate_id="c3"),
+            )
+        event = r2.record_recheck_result(
+            "t1", "dep-B",
+            accepted_receipt(target_id="t1", candidate_id="c3"),
+            pass_audit(target_id="t1", candidate_id="c3"),
+        )
+        self.assertIsNone(event)
+        self.assertNotIn("t1", r2.marked_for_recheck)
+
     def test_blocking_event_is_not_silently_swallowed_on_replay(self):
         log_path = self.tmp_path("ratchet.jsonl")
         r1 = Ratchet(log_path)

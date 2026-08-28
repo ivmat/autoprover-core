@@ -150,7 +150,14 @@ class Ratchet:
                     audit=audit,
                     accepted_at=event["at"],
                 )
-                self._marked_for_recheck.pop(event["target_id"], None)
+                # Only the confirmed dependency is discharged - a target
+                # marked for multiple dependency changes stays marked
+                # for the rest until each is confirmed in turn.
+                outstanding = self._marked_for_recheck.get(event["target_id"])
+                if outstanding is not None:
+                    outstanding.discard(event["triggering_dependency"])
+                    if not outstanding:
+                        self._marked_for_recheck.pop(event["target_id"], None)
             elif etype == "blocking_event":
                 self._blocking.append(BlockingEvent(
                     target_id=event["target_id"],
@@ -353,7 +360,12 @@ class Ratchet:
                 audit=audit,
                 accepted_at=at,
             )
-            self._marked_for_recheck.pop(target_id, None)
+            # Discard only the dependency just confirmed - the target
+            # stays marked for any other outstanding dependency until
+            # its own confirmation arrives.
+            outstanding.discard(changed_dep)
+            if not outstanding:
+                self._marked_for_recheck.pop(target_id, None)
             return None
 
         reason = "recheck failed after dependency change: "
