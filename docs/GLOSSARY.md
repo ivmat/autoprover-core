@@ -88,17 +88,36 @@ verification of the checker's actual implementation. See
 
 ## held / vacuous / not-exercised / failed
 
-The closed, four-value status an obligation is reduced to. `held` means
-the precondition was exercised — it fired in at least one explored
-state — and the property held on every state where it fired;
-`vacuous` means the precondition never fired, and exploration was
-exhaustive; `not-exercised` means the precondition never fired, but
+The closed, four-value status an obligation is reduced to. What `held`
+means depends on which kind of checker produced the receipt, and the two
+readings are not the same claim:
+
+- **From an enumerating checker (a bounded model checker):** the
+  precondition was exercised — it fired in at least one explored state —
+  and the property held on every state where it fired.
+- **From a proof kernel:** the obligation is discharged by the accepted
+  proof. A kernel enumerates no state space, so there is no exploration
+  to report and this `held` carries no coverage claim at all. A plain
+  whole-file kernel run knows only the file-level verdict and reduces
+  every requested obligation to it (see
+  [`reference/autoprover_ref/kernel_gate.py`](../reference/autoprover_ref/kernel_gate.py)).
+  Whether such an obligation's hypothesis can ever fire is precisely
+  what a kernel verdict cannot say; that question belongs to the
+  semantic audit layer's vacuity check.
+
+The three remaining values are stated in enumeration terms, because
+that is where the distinctions come from. `vacuous` means the
+precondition never fired, and exploration was exhaustive; `not-exercised` means the precondition never fired, but
 exploration was bound-truncated so that outcome can't be attributed to
 the system's semantics; `failed` means the property failed on at least
 one explored state where the precondition fired (a violating exercised
 state was found). `vacuous` and `not-exercised` are first-class and
 distinct from `held`, so an obligation that was never really tested can
-never look identical to one that was. See
+never look identical to one that was. A kernel receipt uses two of them
+in the same reduced, exploration-free way: a rejected run marks its
+obligations `failed`, and a run that produced no verdict at all (an
+`error` receipt) marks them `not-exercised` — the checker never reached
+them. See
 [`reference/schema/receipt.schema.json`](../reference/schema/receipt.schema.json)'s
 `obligations[].status` field and
 [`reference/README.md`](../reference/README.md)'s "The model checker"
