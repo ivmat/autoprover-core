@@ -60,6 +60,17 @@ class State(str, Enum):
     CANDIDATE_PRODUCED = "candidate-produced"
     KERNEL_CHECKED = "kernel-checked"
     KERNEL_REJECTED = "kernel-rejected"
+    # A checker that produced NO verdict (timeout, out of memory, an
+    # unsupported construct, an internal failure). Deliberately its own
+    # state rather than a flavour of `kernel-rejected`: the two call for
+    # opposite responses. A rejection says "this candidate is wrong,
+    # write another"; an error says "nothing is known about this
+    # candidate yet, give the checker more resources or record the
+    # clause as out of scope for this tool". Collapsing them sends a
+    # prover chasing a ghost (kernel_gate.py's module docstring), and
+    # receipt schema 2.0.0 says `error` is "never routed as if a
+    # property had been refuted".
+    CHECKER_ERROR = "checker-error"
     AUDITED = "audited"
     ACCEPTED = "accepted"
     AUDIT_REJECTED = "audit-rejected"
@@ -273,7 +284,8 @@ class TargetQueue:
         return to_state
 
     def record_kernel_receipt(self, target_id: str, receipt: Receipt) -> State:
-        """candidate-produced -> kernel-checked | kernel-rejected.
+        """candidate-produced -> kernel-checked | kernel-rejected |
+        checker-error.
 
         Accepts a receipt from either checker kind — ARCHITECTURE.md §4
         treats a proof kernel and a bounded model checker as
@@ -281,6 +293,12 @@ class TargetQueue:
         interchangeable in what their receipts may claim); this queue
         state name follows the diagram's literal wording, not a
         restriction to Lean specifically.
+
+        Each of the receipt's three verdicts gets its own state. In
+        particular `error` is NOT a rejection: the checker produced no
+        verdict, so nothing is known about this candidate, and routing it
+        as a refutation would requeue for a different candidate to a
+        question that was never answered.
         """
         self._require_type(receipt, Receipt)
         self._require_state(target_id, State.CANDIDATE_PRODUCED)
@@ -288,7 +306,12 @@ class TargetQueue:
             raise InvalidTransition(
                 f"receipt.target_id {receipt.target_id!r} does not match {target_id!r}"
             )
-        to_state = State.KERNEL_CHECKED if receipt.verdict == "accepted" else State.KERNEL_REJECTED
+        if receipt.verdict == "accepted":
+            to_state = State.KERNEL_CHECKED
+        elif receipt.verdict == "error":
+            to_state = State.CHECKER_ERROR
+        else:
+            to_state = State.KERNEL_REJECTED
         self._append(target_id, State.CANDIDATE_PRODUCED, to_state, "kernel_receipt",
                      receipt.to_dict())
         return to_state
@@ -304,6 +327,28 @@ class TargetQueue:
         self._require_type(decision, AbandonDecision)
         self._require_state(target_id, State.KERNEL_REJECTED)
         self._append(target_id, State.KERNEL_REJECTED, State.ABANDONED, "abandon_decision",
+                     _evidence_dict(decision))
+        return State.ABANDONED
+
+    def requeue_from_checker_error(self, target_id: str, decision: RequeueDecision) -> State:
+        """checker-error -> queued. The retry a tool error calls for is
+        "run the checker again, with more resources or a different
+        configuration" — the candidate is unchanged and unjudged, which
+        is exactly what distinguishes this from
+        `requeue_from_kernel_rejected`."""
+        self._require_type(decision, RequeueDecision)
+        self._require_state(target_id, State.CHECKER_ERROR)
+        self._append(target_id, State.CHECKER_ERROR, State.QUEUED, "requeue_decision",
+                     _evidence_dict(decision))
+        return State.QUEUED
+
+    def abandon_from_checker_error(self, target_id: str, decision: AbandonDecision) -> State:
+        """checker-error -> abandoned: the honest terminal state for
+        "this clause is out of scope for this tool", which is a fact
+        about the tool, never a refutation of the candidate."""
+        self._require_type(decision, AbandonDecision)
+        self._require_state(target_id, State.CHECKER_ERROR)
+        self._append(target_id, State.CHECKER_ERROR, State.ABANDONED, "abandon_decision",
                      _evidence_dict(decision))
         return State.ABANDONED
 

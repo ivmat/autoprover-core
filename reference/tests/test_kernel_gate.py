@@ -10,7 +10,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from autoprover_ref.kernel_gate import CheckerResult, KernelGate
+from autoprover_ref.kernel_gate import CheckerResult, KernelGate, lean_checker_command
 from autoprover_ref.receipts import (
     Control,
     Coverage,
@@ -383,6 +383,44 @@ class CoverageAndControlTests(unittest.TestCase):
                     kind="ablation", expectation="red", observed="red", of_claim="claim-1",
                 ),
             )
+
+
+class DefaultCheckerCommandFailureTests(unittest.TestCase):
+    """The default (Lean) checker command turns a run that produced no
+    verdict into a `tool-error` RESULT, never into a rejection and never
+    into an exception with no receipt behind it. A checker killed by a
+    signal did not refute anything, and an executable that could not be
+    launched said nothing about the candidate at all."""
+
+    def test_a_signalled_checker_is_a_tool_error_not_a_rejection(self):
+        # /bin/sh kills itself: the process dies on SIGKILL, so its exit
+        # is a negative return code, not a non-zero verdict.
+        command = lean_checker_command("/bin/sh", ("-c", "kill -9 $$"))
+        result = command(Path("ignored.lean"), None)
+        self.assertEqual(result.failure_kind, "tool-error")
+        self.assertFalse(result.accepted)
+        self.assertLess(result.exit_code, 0)
+
+    def test_a_checker_that_cannot_be_launched_is_a_tool_error(self):
+        command = lean_checker_command("/nonexistent/definitely-not-a-checker")
+        result = command(Path("ignored.lean"), None)
+        self.assertEqual(result.failure_kind, "tool-error")
+        self.assertFalse(result.accepted)
+
+    def test_an_ordinary_non_zero_exit_is_still_a_rejection(self):
+        # The distinction only earns its keep if a real refutation still
+        # reads as one: exit 1 is the checker answering, not failing.
+        command = lean_checker_command("/bin/sh", ("-c", "exit 1"))
+        result = command(Path("ignored.lean"), None)
+        self.assertIsNone(result.failure_kind)
+        self.assertFalse(result.accepted)
+        self.assertEqual(result.exit_code, 1)
+
+    def test_a_zero_exit_is_still_an_acceptance(self):
+        command = lean_checker_command("/bin/sh", ("-c", "exit 0"))
+        result = command(Path("ignored.lean"), None)
+        self.assertIsNone(result.failure_kind)
+        self.assertTrue(result.accepted)
 
 
 if __name__ == "__main__":

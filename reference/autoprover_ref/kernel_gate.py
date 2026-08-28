@@ -123,7 +123,21 @@ def lean_checker_command(
     subprocess call.
 
     A run that exceeds `timeout` returns `failure_kind="timeout"` — the
-    gate turns that into an `error` verdict, never a `rejected` one.
+    gate turns that into an `error` verdict, never a `rejected` one. Two
+    more ways a run produces no verdict are reported the same way, as
+    `failure_kind="tool-error"`:
+
+      * the process was killed by a SIGNAL (a crash, an OOM kill, an
+        operator's `kill`). POSIX reports that as a NEGATIVE returncode,
+        which is not the checker answering "no" — it is the checker not
+        finishing. Reading it as a non-zero exit would file a crash as a
+        refutation of the candidate.
+      * the executable could not be launched at all (not installed, not
+        executable, wrong path). Raising there would leave the caller
+        with an exception and no receipt, so the one artifact recording
+        that the run happened would not exist. A missing checker says
+        nothing about the candidate, and that "nothing" has to be
+        recorded like any other verdict-less run.
     """
 
     def run(file_path: Path, timeout: Optional[float] = None) -> CheckerResult:
@@ -137,6 +151,23 @@ def lean_checker_command(
                 stdout=exc.stdout if isinstance(exc.stdout, str) else "",
                 stderr=exc.stderr if isinstance(exc.stderr, str) else "",
                 failure_kind="timeout",
+            )
+        except OSError as exc:
+            # FileNotFoundError, PermissionError, and friends: the
+            # checker never ran.
+            return CheckerResult(
+                accepted=False,
+                exit_code=-1,
+                stderr=f"could not launch checker {cmd[0]!r}: {exc}",
+                failure_kind="tool-error",
+            )
+        if proc.returncode < 0:
+            return CheckerResult(
+                accepted=False,
+                exit_code=proc.returncode,
+                stdout=proc.stdout,
+                stderr=proc.stderr,
+                failure_kind="tool-error",
             )
         return CheckerResult(
             accepted=(proc.returncode == 0),

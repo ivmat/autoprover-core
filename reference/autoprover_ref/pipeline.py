@@ -131,6 +131,29 @@ class Pipeline:
         write_receipt(self.receipts_dir / f"{target_id}.{candidate_id}.kernel.json", receipt)
         state = self.queue.record_kernel_receipt(target_id, receipt)
 
+        if state == State.CHECKER_ERROR:
+            # No verdict was produced, so nothing is known about this
+            # candidate. The requeue reason must not say the candidate
+            # was rejected: a scheduler reading that would go looking for
+            # a different proof of a statement nothing has judged.
+            state = self.queue.requeue_from_checker_error(
+                target_id,
+                RequeueDecision(reason=(
+                    f"checker produced no verdict (failure_kind="
+                    f"{receipt.failure_kind!r}); tool error, not a property refutation — "
+                    f"re-run with more resources, or record the target as out of scope "
+                    f"for this checker via abandon_from_checker_error"
+                )),
+            )
+            return PipelineResult(
+                target_id=target_id,
+                candidate_id=candidate_id,
+                final_state=state.value,
+                kernel_receipt=receipt,
+                audit_verdict=None,
+                accepted_entry=None,
+            )
+
         if state == State.KERNEL_REJECTED:
             state = self.queue.requeue_from_kernel_rejected(
                 target_id, RequeueDecision(reason="kernel rejected candidate; eligible for retry")

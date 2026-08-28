@@ -24,6 +24,9 @@ from autoprover_ref.receipts import (
     Checker,
     Obligation,
     Receipt,
+    Subject,
+    Tool,
+    Toolchain,
     now_iso,
 )
 
@@ -47,6 +50,29 @@ def kernel_receipt(target_id, candidate_id, verdict="accepted"):
         # format; they stay on 1.0.0 so the older format keeps being
         # driven end-to-end through both components.
         schema_version="1.0.0",
+    )
+
+
+def error_receipt(target_id, candidate_id, failure_kind="timeout"):
+    """A 2.0.0 receipt for a run that produced NO verdict. 1.0.0 has no
+    field to record the failure kind in, so an error receipt is 2.0.0 by
+    construction (see kernel_gate.KernelGate.check)."""
+    return Receipt(
+        target_id=target_id,
+        candidate_id=candidate_id,
+        checker=Checker(kind="kernel", name="lean", version="4.31.0"),
+        verdict="error",
+        certificate=None,
+        harness=None, bound=None, env_assumptions=None,
+        obligations=(Obligation(id=target_id, status="not-exercised"),),
+        produced_at=now_iso(),
+        claim_id="claim-1",
+        subject=Subject(repo="example/subject", commit="0" * 40, unit=None),
+        toolchain=Toolchain(
+            tool=Tool(name="lean", commit_or_version="4.31.0"),
+            dependencies=(), flags=(), features=None,
+        ),
+        failure_kind=failure_kind,
     )
 
 
@@ -115,6 +141,60 @@ class HappyPathTests(TempDirCase):
         q.start_attempt("t1", AttemptStarted(attempt_id="a1", prover_name="p"))
         state = q.record_no_candidate("t1", NoCandidateProduced(attempt_id="a1", reason="no proof found"))
         self.assertEqual(state, State.QUEUED)
+
+
+class CheckerErrorIsNotRejectionTests(TempDirCase):
+    """A checker that timed out, ran out of memory, or met a construct it
+    cannot model produced NO verdict. Routing that as `kernel-rejected`
+    tells a scheduler the candidate was refuted and sends a prover off to
+    write a different proof of a statement nothing is known about."""
+
+    def _at_candidate(self):
+        q = TargetQueue(self.tmp_path("q.jsonl"))
+        q.enqueue("t1", TargetEntry(statement="s", provenance={}))
+        q.start_attempt("t1", AttemptStarted(attempt_id="a1", prover_name="p"))
+        q.record_candidate("t1", CandidateArtifact(candidate_id="c1", artifact_path="c1.lean"))
+        return q
+
+    def test_error_verdict_reaches_its_own_state_not_kernel_rejected(self):
+        q = self._at_candidate()
+        state = q.record_kernel_receipt("t1", error_receipt("t1", "c1"))
+        self.assertEqual(state, State.CHECKER_ERROR)
+        self.assertNotEqual(state, State.KERNEL_REJECTED)
+        self.assertEqual(q.state_of("t1"), State.CHECKER_ERROR)
+
+    def test_requeue_from_checker_error(self):
+        q = self._at_candidate()
+        q.record_kernel_receipt("t1", error_receipt("t1", "c1", failure_kind="oom"))
+        state = q.requeue_from_checker_error(
+            "t1", RequeueDecision(reason="checker ran out of memory; retry with more"),
+        )
+        self.assertEqual(state, State.QUEUED)
+
+    def test_abandon_from_checker_error(self):
+        q = self._at_candidate()
+        q.record_kernel_receipt(
+            "t1", error_receipt("t1", "c1", failure_kind="unsupported-construct"),
+        )
+        state = q.abandon_from_checker_error(
+            "t1", AbandonDecision(reason="out of scope for this tool"),
+        )
+        self.assertEqual(state, State.ABANDONED)
+
+    def test_the_rejection_requeue_path_does_not_accept_a_checker_error(self):
+        q = self._at_candidate()
+        q.record_kernel_receipt("t1", error_receipt("t1", "c1"))
+        with self.assertRaises(InvalidTransition):
+            q.requeue_from_kernel_rejected("t1", RequeueDecision(reason="kernel rejected"))
+
+    def test_checker_error_state_survives_replay(self):
+        log_path = self.tmp_path("q.jsonl")
+        q = TargetQueue(log_path)
+        q.enqueue("t1", TargetEntry(statement="s", provenance={}))
+        q.start_attempt("t1", AttemptStarted(attempt_id="a1", prover_name="p"))
+        q.record_candidate("t1", CandidateArtifact(candidate_id="c1", artifact_path="c1.lean"))
+        q.record_kernel_receipt("t1", error_receipt("t1", "c1"))
+        self.assertEqual(TargetQueue.replay(log_path).state_of("t1"), State.CHECKER_ERROR)
 
 
 class RefusesEvidencelessTransitionTests(TempDirCase):

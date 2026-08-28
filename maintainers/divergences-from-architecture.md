@@ -10,10 +10,11 @@ Simple-Technical-English edits; content unchanged).
 
 ## Divergences from a literal reading of ARCHITECTURE.md
 
-`docs/ARCHITECTURE.md` is prose; this package is code, and in two places
-the code makes a choice the prose leaves open. Both are recorded here
-rather than smoothed over, because the difference is the kind of thing a
-reader reconciling the two documents will otherwise trip on:
+`docs/ARCHITECTURE.md` is prose; this package is code, and in three
+places the code makes a choice the prose leaves open. All three are
+recorded here rather than smoothed over, because the difference is the
+kind of thing a reader reconciling the two documents will otherwise trip
+on:
 
 1. **The `kernel-checked → audited → accepted | audit-rejected` hop.**
    ARCHITECTURE.md §2's diagram draws one arrow chain through an
@@ -37,6 +38,17 @@ reader reconciling the two documents will otherwise trip on:
    expect it to reject a model-checker receipt; a doc note saying "this
    state's name is a holdover from the diagram, not a restriction" would
    close that gap.
+3. **A `checker-error` state the §2 diagram does not draw.** The diagram
+   gives `candidate-produced` two successors, `kernel-checked` and
+   `kernel-rejected`, because it was drawn for a two-valued verdict.
+   Receipt schema 2.0.0 has three: `accepted`, `rejected`, and `error`,
+   the last meaning the checker produced no verdict at all. `queue.State`
+   therefore adds `checker-error`, reached only by an `error` receipt,
+   with its own requeue and abandon transitions. This is an addition to
+   the diagram rather than a reinterpretation of it: the alternative —
+   folding `error` into `kernel-rejected` — is what the schema forbids in
+   so many words ("never routed as if a property had been refuted"), and
+   the queue cannot honour that with only two successors to route into.
 
 Five further gaps between the prose and this package have since been
 closed. They are kept in this section, as implemented features rather
@@ -68,6 +80,21 @@ than as gaps, so the history of the interface stays legible:
   seam gained a timeout to match, and `KernelGate` maps any reported
   `failure_kind` to `error` with the kind recorded rather than to
   `rejected`.
+
+  **What that bullet used to overstate, now corrected.** Mapping the
+  verdict at the gate was only the first half. Downstream,
+  `queue.record_kernel_receipt` sent every non-accepted verdict —
+  `error` included — to `kernel-rejected`, and `Pipeline` then logged the
+  requeue reason "kernel rejected candidate; eligible for retry": the
+  ghost chase `kernel_gate.py`'s own docstring describes, reintroduced
+  two modules later. The queue now routes `error` to its own
+  `checker-error` state (divergence 3 above), and the pipeline requeues
+  it with a reason naming the `failure_kind` and saying explicitly that
+  this is a tool error, not a property refutation. The default checker
+  command matches: a signal-killed process (negative return code) and a
+  checker that cannot be launched at all are both `tool-error` RESULTS
+  now, rather than an ordinary rejection and an exception with no
+  receipt behind it.
 
 - **Obligation-level vacuity/not-exercised detection** has no home in the
   kernel gate alone:

@@ -13,6 +13,7 @@ from autoprover_ref.kernel_gate import CheckerResult, KernelGate
 from autoprover_ref.pipeline import Pipeline
 from autoprover_ref.queue import State, TargetQueue
 from autoprover_ref.ratchet import Ratchet
+from autoprover_ref.receipts import Subject, Tool, Toolchain
 
 from _tmpdir import TempDirCase
 
@@ -165,6 +166,71 @@ class VacuousObligationDoesNotReachTheRatchetTests(TempDirCase):
 
         self.assertEqual(result.final_state, State.ACCEPTED.value)
         self.assertIn("mc", pipeline.ratchet.accepted_targets)
+
+
+class CheckerErrorIsNotAGhostChaseTests(TempDirCase):
+    """kernel_gate.py's own docstring: a checker that times out or meets
+    a construct it cannot model "has produced no verdict at all. If such
+    a run were reported as `rejected`, a scheduler would read it as 'the
+    candidate is wrong' and requeue for a new candidate - chasing a
+    ghost". The pipeline must not write that requeue reason."""
+
+    def _pipeline(self, failure_kind: str) -> Pipeline:
+        def checker(_path: Path, _timeout=None) -> CheckerResult:
+            return CheckerResult(accepted=False, exit_code=-1, failure_kind=failure_kind)
+
+        gate = KernelGate(
+            checker_command=checker,
+            checker_name="fake-lean",
+            checker_version="0.0.0",
+            kind="kernel",
+            toolchain_id="fake-toolchain",
+            subject=Subject(repo="example/subject", commit="0" * 40, unit=None),
+            toolchain=Toolchain(
+                tool=Tool(name="fake-lean", commit_or_version="0" * 40),
+                dependencies=(), flags=(), features=None,
+            ),
+            claim_id="claim-1",
+        )
+        return Pipeline(
+            queue=TargetQueue(self.tmp_path("queue.jsonl")),
+            gate=gate,
+            ratchet=Ratchet(self.tmp_path("ratchet.jsonl")),
+            receipts_dir=self.tmp_path("receipts"),
+        )
+
+    def _run(self, pipeline: Pipeline):
+        provenance = TargetProvenance(source="synthetic", statement_text="1 = 1")
+        return pipeline.run_target(
+            target_id="slow", candidate_id="cand1", candidate_file="slow.lean",
+            provenance=provenance,
+        )
+
+    def test_timeout_is_routed_as_a_tool_error_not_a_rejection(self):
+        pipeline = self._pipeline("timeout")
+        result = self._run(pipeline)
+
+        self.assertEqual(result.kernel_receipt.verdict, "error")
+        self.assertEqual(result.kernel_receipt.failure_kind, "timeout")
+        self.assertIsNone(result.audit_verdict)
+        self.assertNotIn("slow", pipeline.ratchet.accepted_targets)
+
+        states = [e["to_state"] for e in pipeline.queue.events_for("slow")]
+        self.assertIn(State.CHECKER_ERROR.value, states)
+        self.assertNotIn(State.KERNEL_REJECTED.value, states)
+
+    def test_the_requeue_reason_does_not_claim_the_candidate_was_rejected(self):
+        pipeline = self._pipeline("unsupported-construct")
+        self._run(pipeline)
+
+        requeues = [
+            e for e in pipeline.queue.events_for("slow")
+            if e["evidence_kind"] == "requeue_decision"
+        ]
+        self.assertEqual(len(requeues), 1)
+        reason = requeues[0]["evidence"]["reason"]
+        self.assertNotIn("rejected", reason)
+        self.assertIn("unsupported-construct", reason)
 
 
 if __name__ == "__main__":
