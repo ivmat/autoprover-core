@@ -20,10 +20,10 @@ reader reconciling the two documents will otherwise trip on:
    realizes this as **two** evidence-consuming log events recorded from
    the same audit verdict artifact (`kernel-checked → audited`, then
    `audited → accepted|audit-rejected`), both appended within one call.
-   This is a fidelity choice: an evidence-per-transition discipline
-   applied literally to a diagram with a named intermediate state has to
-   pass through that state explicitly, and the reference implementation
-   errs on the side of that literalism rather than collapsing the two
+   This is a fidelity choice. An evidence-per-transition discipline,
+   applied literally to a diagram with a named intermediate state, has
+   to pass through that state explicitly. The reference implementation
+   errs on the side of that literalism, rather than collapsing the two
    hops into one transition function. Either reading is defensible; the
    diagram doesn't say which.
 2. **"Kernel gate" is not exclusively about proof kernels.** §4 treats a
@@ -104,17 +104,17 @@ than as gaps, so the history of the interface stays legible:
   whether its hypothesis can fire, whether it ever failed to, whether its
   name is reflected in its statement, whether its scope is as broad as
   claimed. None of them can tell a real proof from one whose oracle is
-  too weak to fail: a postcondition that excludes nothing passes every
+  too weak to fail. A postcondition that excludes nothing passes every
   ordinary run indistinguishably from one that excludes the right things.
   The only artifact that separates them is a run in which the check DID
   fire. `audit.check_controls` requires a claim presented as
-  contract-grade (`TargetProvenance.claim_grade == "contract"`) to carry,
-  in the evidence set gathered under its `claim_id`, a control receipt of
-  kind `mutation` that was predicted `red` and observed `red` — a check
-  somebody watched fail. It abstains for probe-grade or ungraded claims
-  and when no evidence set is supplied at all, and it runs LAST, because
-  a question about the evidence set is worth asking only once every
-  question about the statement itself has been answered.
+  contract-grade (`TargetProvenance.claim_grade == "contract"`) to carry
+  a control receipt in the evidence set gathered under its `claim_id`.
+  That receipt must be of kind `mutation`, predicted `red`, and observed
+  `red` — a check somebody watched fail. It abstains for probe-grade or
+  ungraded claims, and when no evidence set is supplied at all. It runs
+  LAST, because a question about the evidence set is worth asking only
+  once every question about the statement itself has been answered.
 - **`scope-narrower-than-claimed`** was schema-defined but not
   implemented — this reference package originally shipped only two audit
   checks (vacuity, name/content) and left this one as a documented gap

@@ -70,11 +70,11 @@ concerns outside a stdlib reference package's scope.
 3. **Null never means a guess** — `certificate`, `harness`, `bound`,
    `env_assumptions`, `failure_kind`, `control`, per-obligation
    `coverage`, `subject.unit` and `toolchain.features` are explicit,
-   schema-checked nullable fields; the schemas enforce exactly when each
+   schema-checked nullable fields. The schemas enforce exactly when each
    may/must be null (see the `allOf`/`if`/`then`/`else` blocks in the
-   schema files). Where two nulls would mean different things they are
+   schema files). Where two nulls would mean different things, they are
    given different encodings instead: `toolchain.features: null` means
-   the tool has no feature-selection concept, `[]` means it has one and
+   the tool has no feature-selection concept; `[]` means it has one and
    none were enabled.
 4. **Atomic, exists-implies-complete writes** — `receipts.atomic_write_json`
    writes to a temp file in the target directory, `fsync`s, then

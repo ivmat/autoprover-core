@@ -21,8 +21,8 @@ running instance: the point is the shape, not the numbers.
 
 The thesis behind every design choice here is simple: **rigor has to live
 on the interfaces, not just inside the components.** An LLM prover, a proof
-checker, and an audit step can each be individually well-built and the
-system can still be untrustworthy, if the *handoffs* between them are
+checker, and an audit step can each be individually well-built. The
+system can still be untrustworthy if the *handoffs* between them are
 prose ("looks fine to me") instead of contracts (typed inputs, typed
 verdicts, checkable postconditions). Every section below follows the same
 template: state what a component may **assume** on entry, and what it must
@@ -130,9 +130,9 @@ same verdict, independent of the tool that produced it. A bounded model
 checker's acceptance yields a verdict that is valid only relative to the
 recorded harness, the bound on the state space explored, the
 environment assumptions encoded in the harness, and the checker's own
-version — change any of those and the verdict no longer applies. Its
+version. Change any of those and the verdict no longer applies. Its
 receipt must record all four explicitly, and must not claim to carry a
-re-runnable proof object; presenting a bounded-model-checker verdict as
+re-runnable proof object. Presenting a bounded-model-checker verdict as
 if it had kernel-grade portability is exactly the kind of unlabeled
 category collapse this architecture exists to prevent.
 
@@ -243,10 +243,10 @@ against the recorded proof object and get the same answer, without
 trusting the party that produced it. The audit verdict in §5 is
 machine-*readable* — structured, typed, parseable — but it is a judgment
 about correspondence between a statement and its stated intent, not a
-fact with an independent re-derivation procedure; re-running the audit
+fact with an independent re-derivation procedure. Re-running the audit
 can produce a different judgment without either run being "wrong" in the
-kernel's sense. The architecture treats the two accordingly: kernel
-verdicts gate the ratchet in §6 directly, audit verdicts route a target
+kernel's sense. The architecture treats the two accordingly. Kernel
+verdicts gate the ratchet in §6 directly. Audit verdicts route a target
 back to the queue on failure rather than being re-run for a tie-break.
 No component ever has to trust another component's *prose* about what it
 did, but not every non-prose verdict carries the same kind of guarantee.

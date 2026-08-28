@@ -80,8 +80,8 @@ are argued in `check_controls`' docstring:
 
 - the *revert* leg of a mutation experiment (predict green, observe
   green) demonstrates only that the experiment was reversible. It shows
-  nobody watching the oracle fail, so it does not satisfy a requirement
-  whose entire content is that somebody did.
+  that nobody watched the oracle fail, so it does not satisfy a
+  requirement whose entire content is that somebody did.
 - an **ablation** — removing a precondition and seeing what breaks —
   attests that the precondition is load-bearing. That is adjacent to, but
   not the same as, falsifiability of the claim's oracle, so ablations are

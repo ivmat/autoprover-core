@@ -36,7 +36,7 @@ reserved for in-focus entries.
 - **A-1 · An LLM-based autoprover system can be built and be SOUND.**
   There is no proof of this; it is the founding bet. The architecture
   reduces it to "soundness lives entirely in the non-LLM gates" (kernel,
-  checker, audit) — which reduces A-1 to A-2..A-5 plus the claim that no
+  checker, audit). That reduces A-1 to A-2..A-5, plus the claim that no
   LLM output reaches a trust decision ungated. **That reduction is an
   argument, not a theorem.**
   *fails-if:* any path is found where generative output changes accepted
