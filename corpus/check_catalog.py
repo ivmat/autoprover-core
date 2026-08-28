@@ -91,6 +91,11 @@ class Catalog:
         self.total_line: str | None = None
         self.total_lineno: int = 0
         self.malformed: list[str] = []
+        # Counting problems distinct from CHECK_SETS's identity problems:
+        # a second `## Area` heading is a set-identity issue (does the
+        # heading name a NEW area or not?), a second `Area: N modules.`
+        # footer is a counting issue (which N does the reader trust?).
+        self.count_malformed: list[str] = []
 
 
 def parse_catalog(path: Path) -> Catalog:
@@ -98,6 +103,7 @@ def parse_catalog(path: Path) -> Catalog:
     catalog = Catalog()
     area: str | None = None
     in_total = False
+    seen_areas: dict[str, int] = {}
 
     for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         line = raw.rstrip()
@@ -108,7 +114,18 @@ def parse_catalog(path: Path) -> Catalog:
             in_total = name in _NON_AREA_HEADINGS
             area = None if in_total else name
             if area is not None:
-                catalog.area_order.append(area)
+                if area in seen_areas:
+                    # Blindly appending here is exactly how a second,
+                    # empty `## Concurrency` heading used to inflate the
+                    # area count for free: the heading names no NEW area,
+                    # so it is rejected rather than counted.
+                    catalog.malformed.append(
+                        f"CATALOG.md:{lineno}: `## {area}` heading appears more than once "
+                        f"(first at CATALOG.md:{seen_areas[area]})"
+                    )
+                else:
+                    seen_areas[area] = lineno
+                    catalog.area_order.append(area)
             continue
 
         if in_total and line.strip() and not line.startswith("#"):
@@ -119,7 +136,14 @@ def parse_catalog(path: Path) -> Catalog:
 
         footer = _AREA_FOOTER.match(line)
         if footer:
-            catalog.footers[footer.group("area")] = (int(footer.group("count")), lineno)
+            footer_area = footer.group("area")
+            if footer_area in catalog.footers:
+                catalog.count_malformed.append(
+                    f"CATALOG.md:{lineno}: `{footer_area}: N modules.` footer appears more "
+                    f"than once (first at CATALOG.md:{catalog.footers[footer_area][1]})"
+                )
+            else:
+                catalog.footers[footer_area] = (int(footer.group("count")), lineno)
             continue
 
         if not line.startswith("| "):
@@ -218,7 +242,7 @@ def check_sets(catalog: Catalog, imports: dict[str, str], files: dict[str, str])
 
 def check_counts(catalog: Catalog) -> list[str]:
     """Check 2: every count the catalog states matches the rows it carries."""
-    problems: list[str] = []
+    problems: list[str] = list(catalog.count_malformed)
 
     actual: dict[str, int] = {}
     for row in catalog.rows:
@@ -246,8 +270,14 @@ def check_counts(catalog: Catalog) -> list[str]:
         return problems
 
     where = f"CATALOG.md:{catalog.total_lineno}"
-    if int(total.group("areas")) != len(catalog.area_order):
-        problems.append(f"{where}: Total says {total.group('areas')} areas, the catalog has {len(catalog.area_order)}")
+    # Distinct areas, not headings seen: `area_order` no longer carries a
+    # duplicate heading (parse_catalog rejects it as malformed instead of
+    # appending it), but count distinctly here too rather than trust that
+    # invariant silently — a duplicated heading must never buy an extra
+    # count either way.
+    distinct_areas = set(catalog.area_order)
+    if int(total.group("areas")) != len(distinct_areas):
+        problems.append(f"{where}: Total says {total.group('areas')} areas, the catalog has {len(distinct_areas)}")
     if int(total.group("modules")) != len(catalog.rows):
         problems.append(f"{where}: Total says {total.group('modules')} modules, the catalog has {len(catalog.rows)} rows")
 
@@ -260,7 +290,11 @@ def check_counts(catalog: Catalog) -> list[str]:
         if not parsed:
             problems.append(f"{where}: Total breakdown entry `{entry}` is not `<Area> <count>`")
             continue
-        stated_breakdown[parsed.group("area")] = int(parsed.group("count"))
+        breakdown_area = parsed.group("area")
+        if breakdown_area in stated_breakdown:
+            problems.append(f"{where}: Total breakdown names `{breakdown_area}` more than once")
+            continue
+        stated_breakdown[breakdown_area] = int(parsed.group("count"))
     for area in catalog.area_order:
         if area not in stated_breakdown:
             problems.append(f"{where}: Total breakdown omits `{area}`")
@@ -377,6 +411,38 @@ def selftest(source_dir: Path) -> int:
             encoding="utf-8",
         )
 
+    def duplicate_area_heading(d: Path) -> None:
+        # A second, empty `## <area>` heading with no table of its own -
+        # the planted case that used to inflate the area count for free.
+        path = d / "CATALOG.md"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text.rstrip("\n") + f"\n\n## {area}\n", encoding="utf-8")
+
+    def duplicate_area_footer(d: Path) -> None:
+        path = d / "CATALOG.md"
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            match = _AREA_FOOTER.match(line)
+            if match and match.group("area") == area:
+                lines.insert(i + 1, line)
+                break
+        else:
+            raise SystemExit(f"selftest: no `{area}: N modules.` footer to duplicate")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def duplicate_breakdown_key(d: Path) -> None:
+        path = d / "CATALOG.md"
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            match = _TOTAL.match(line.strip())
+            if match:
+                first_entry = match.group("breakdown").split(",")[0].strip()
+                new_breakdown = match.group("breakdown") + f", {first_entry}"
+                lines[i] = line.replace(match.group("breakdown"), new_breakdown, 1)
+                path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+                return
+        raise SystemExit("selftest: no Total line to mutate for a duplicate breakdown key")
+
     def blank_a_restriction(d: Path) -> None:
         path = d / "CATALOG.md"
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -397,6 +463,9 @@ def selftest(source_dir: Path) -> int:
         (f"`{area}` per-area footer count off by one", bump_area_footer, CHECK_COUNTS),
         ("Total `full` count off by seven", corrupt_total, CHECK_COUNTS),
         ("a scoped row with its restriction removed", blank_a_restriction, CHECK_FLAGS),
+        (f"a duplicated empty `## {area}` heading", duplicate_area_heading, CHECK_SETS),
+        (f"a duplicate `{area}: N modules.` footer", duplicate_area_footer, CHECK_COUNTS),
+        ("a duplicate area key in the Total breakdown", duplicate_breakdown_key, CHECK_COUNTS),
     ]
 
     undetected: list[str] = []
