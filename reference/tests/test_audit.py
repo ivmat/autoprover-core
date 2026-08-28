@@ -387,6 +387,35 @@ class ScopeCheckTests(unittest.TestCase):
                 ok, details = check_scope(provenance)
                 self.assertTrue(ok, details)
 
+    def test_anonymous_instance_binder_alone_counts_as_a_binder(self):
+        # Isolates the instance-binder case from
+        # test_implicit_and_instance_binders_count_as_binders above: that
+        # test's Lean example also carries an explicit `(l : List α)`
+        # binder, so it cannot tell "the instance binder is recognized"
+        # apart from "the explicit binder is recognized". Here
+        # `[DecidableEq α]` is the ONLY binder in the statement - an
+        # anonymous instance binder has no named variable before a colon,
+        # because it has no colon at all.
+        provenance = TargetProvenance(
+            source="synthetic",
+            statement_text="theorem eq_dec_holds [DecidableEq α] : True",
+            claimed_scope="for any type, this holds",
+        )
+        ok, details = check_scope(provenance)
+        self.assertTrue(ok, details)
+
+    def test_grouped_binder_alone_counts_as_a_binder(self):
+        # Isolates the grouped-binder case: multiple names sharing one
+        # type before the colon, `{α β : Type}`, with no other binder in
+        # the statement.
+        provenance = TargetProvenance(
+            source="synthetic",
+            statement_text="theorem pair_swap {α β : Type} : True",
+            claimed_scope="for any types, this holds",
+        )
+        ok, details = check_scope(provenance)
+        self.assertTrue(ok, details)
+
     def test_a_statement_with_no_binder_at_all_is_still_flagged(self):
         # The broadened pattern must not have become "matches anything":
         # a bracketed list literal is not a binder.

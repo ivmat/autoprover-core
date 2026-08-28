@@ -427,16 +427,26 @@ UNIVERSAL_SCOPE_SIGNALS: tuple[str, ...] = (
 # statement is actually stated about a variable, not a fixed instance.
 # All three of Lean's binder brackets count, because all three quantify:
 # explicit "(n : Nat)", implicit "{α : Type}", and instance
-# "[inst : DecidableEq α]". Matching only the round brackets flagged
-# `theorem foo {α : Type} ...` as having no quantified variable at all,
-# which is a false positive on exactly the most general theorems. The
-# identifier and type-head classes are Unicode letter classes rather than
-# [A-Za-z], since Lean's usual type variables (α, β, σ) are not ASCII.
-# Still a syntactic pattern over one surface syntax, not a generality
-# checker; a statement written in another syntax may need another
-# pattern, which is the ordinary contributable engineering the rest of
-# this module already describes.
-_BINDER_PATTERN = re.compile(r"[(\[{]\s*[^\W\d]\w*\s*:\s*[^\W\d]")
+# "[inst : DecidableEq α]" - or, just as commonly, an ANONYMOUS instance
+# binder with no bound name at all, "[DecidableEq α]". Matching only the
+# round brackets flagged `theorem foo {α : Type} ...` as having no
+# quantified variable at all, which is a false positive on exactly the
+# most general theorems. Two further gaps in the "named : Type" shape:
+# a GROUPED binder puts several names before one colon, "{α β : Type}",
+# and an anonymous instance binder has no colon at all, just a class name
+# followed by its arguments, "[DecidableEq α]" — so the pattern has two
+# alternatives: the named form (now allowing more than one name before
+# the colon) and a bracket-only form for the colon-less anonymous
+# instance case. The identifier and type-head classes are Unicode letter
+# classes rather than [A-Za-z], since Lean's usual type variables (α, β,
+# σ) are not ASCII. Still a syntactic pattern over one surface syntax,
+# not a generality checker; a statement written in another syntax may
+# need another pattern, which is the ordinary contributable engineering
+# the rest of this module already describes.
+_BINDER_PATTERN = re.compile(
+    r"[(\[{]\s*[^\W\d]\w*(?:\s+[^\W\d]\w*)*\s*:\s*[^\W\d]"  # named, incl. grouped: (n : T), {α β : T}
+    r"|\[\s*[^\W\d]\w*(?:\s+[^\W\d][\w']*)+\s*\]"  # anonymous instance: [ClassName arg ...]
+)
 
 # A would-be-universal variable pinned to one concrete numeral, e.g.
 # "n = 5" — structural evidence the statement narrows to a single value
