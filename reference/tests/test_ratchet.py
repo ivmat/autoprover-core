@@ -147,6 +147,83 @@ class RecheckTests(TempDirCase):
         self.assertNotIn("t1", ratchet.accepted_targets)
         self.assertEqual(len(ratchet.blocking_events), 1)
 
+    def test_recheck_refuses_a_target_that_was_never_marked(self):
+        # `record_recheck_result` is not a second admission path into the
+        # monotone set: without an outstanding recheck mark there is no
+        # re-verification to record, and a fresh receipt/audit pair must
+        # go through `accept()` (which is the only way in).
+        ratchet = Ratchet(self.tmp_path("ratchet.jsonl"))
+        with self.assertRaises(RatchetError):
+            ratchet.record_recheck_result(
+                "never-seen", "shared_def",
+                accepted_receipt(target_id="never-seen", candidate_id="c1"),
+                pass_audit(target_id="never-seen", candidate_id="c1"),
+            )
+        self.assertNotIn("never-seen", ratchet.accepted_targets)
+
+    def test_recheck_refuses_a_dependency_that_was_never_marked(self):
+        ratchet = Ratchet(self.tmp_path("ratchet.jsonl"))
+        ratchet.accept(accepted_receipt(target_id="t1", candidate_id="c1"),
+                       pass_audit(target_id="t1", candidate_id="c1"))
+        ratchet.recheck_dependents("shared_def", ["t1"])
+        with self.assertRaises(RatchetError):
+            ratchet.record_recheck_result(
+                "t1", "some_other_dep",
+                accepted_receipt(target_id="t1", candidate_id="c2"),
+                pass_audit(target_id="t1", candidate_id="c2"),
+            )
+        self.assertIn("t1", ratchet.marked_for_recheck)
+
+    def test_recheck_refuses_a_receipt_and_audit_about_different_candidates(self):
+        # The same pair validation `accept()` performs: a receipt about
+        # candidate A and an audit about candidate B are not evidence
+        # about one artifact, whatever each says on its own.
+        ratchet = Ratchet(self.tmp_path("ratchet.jsonl"))
+        ratchet.accept(accepted_receipt(target_id="t1", candidate_id="c1"),
+                       pass_audit(target_id="t1", candidate_id="c1"))
+        ratchet.recheck_dependents("shared_def", ["t1"])
+        with self.assertRaises(RatchetError):
+            ratchet.record_recheck_result(
+                "t1", "shared_def",
+                accepted_receipt(target_id="t1", candidate_id="cA"),
+                pass_audit(target_id="t1", candidate_id="cB"),
+            )
+        # Refused, so nothing was recorded either way: still accepted on
+        # the old evidence, still marked as owing a re-verification.
+        self.assertIn("t1", ratchet.accepted_targets)
+        self.assertIn("t1", ratchet.marked_for_recheck)
+        self.assertEqual(ratchet.blocking_events, ())
+
+    def test_recheck_refuses_artifacts_about_another_target(self):
+        ratchet = Ratchet(self.tmp_path("ratchet.jsonl"))
+        ratchet.accept(accepted_receipt(target_id="t1", candidate_id="c1"),
+                       pass_audit(target_id="t1", candidate_id="c1"))
+        ratchet.recheck_dependents("shared_def", ["t1"])
+        with self.assertRaises(RatchetError):
+            ratchet.record_recheck_result(
+                "t1", "shared_def",
+                accepted_receipt(target_id="t2", candidate_id="c1"),
+                pass_audit(target_id="t2", candidate_id="c1"),
+            )
+        self.assertIn("t1", ratchet.marked_for_recheck)
+
+    def test_recheck_confirms_a_marked_target_with_a_fresh_candidate(self):
+        # The happy path the refusals above must not have broken: a
+        # marked target, re-verified on a NEW candidate, is refreshed.
+        ratchet = Ratchet(self.tmp_path("ratchet.jsonl"))
+        ratchet.accept(accepted_receipt(target_id="t1", candidate_id="c1"),
+                       pass_audit(target_id="t1", candidate_id="c1"))
+        ratchet.recheck_dependents("shared_def", ["t1"])
+        event = ratchet.record_recheck_result(
+            "t1", "shared_def",
+            accepted_receipt(target_id="t1", candidate_id="c2"),
+            pass_audit(target_id="t1", candidate_id="c2"),
+        )
+        self.assertIsNone(event)
+        self.assertIn("t1", ratchet.accepted_targets)
+        self.assertEqual(ratchet.entry_for("t1").candidate_id, "c2")
+        self.assertNotIn("t1", ratchet.marked_for_recheck)
+
     def test_blocking_event_is_not_silently_swallowed_on_replay(self):
         log_path = self.tmp_path("ratchet.jsonl")
         r1 = Ratchet(log_path)

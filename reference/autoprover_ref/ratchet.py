@@ -13,6 +13,10 @@ quietly treated as "must have been wrong before."
 shared dependency changes, every accepted result depending on it is
 marked for re-verification, and a re-check that comes back failing
 raises a loud, logged blocking event rather than a quiet state change.
+`record_recheck_result()` is a RE-verification path only, and enforces
+that: it refuses a target with no outstanding mark for the dependency it
+names, and it validates the receipt/audit pair exactly as `accept()`
+does — so it can refresh an entry, never create one.
 Like the queue in `queue.py`, the ratchet's history is an append-only
 JSONL event log; the accepted set and the blocking-event list are both
 derived by folding it.
@@ -92,7 +96,12 @@ class Ratchet:
             self._events = self._read_log(self.log_path)
         self._accepted: dict[str, AcceptedEntry] = {}
         self._blocking: list[BlockingEvent] = []
-        self._marked_for_recheck: set[str] = set()
+        # target_id -> the dependencies whose change is still owed a
+        # re-verification for that target. Keyed rather than a bare set
+        # because `record_recheck_result` must be able to ask "was THIS
+        # target marked for THIS dependency", not merely "was something
+        # marked at some point".
+        self._marked_for_recheck: dict[str, set[str]] = {}
         self._fold()
 
     # -- persistence -----------------------------------------------------
@@ -123,12 +132,14 @@ class Ratchet:
                     audit=audit,
                     accepted_at=event["at"],
                 )
-                self._marked_for_recheck.discard(event["target_id"])
+                self._marked_for_recheck.pop(event["target_id"], None)
             elif etype == "remove":
                 self._accepted.pop(event["target_id"], None)
-                self._marked_for_recheck.discard(event["target_id"])
+                self._marked_for_recheck.pop(event["target_id"], None)
             elif etype == "recheck_marked":
-                self._marked_for_recheck.add(event["target_id"])
+                self._marked_for_recheck.setdefault(event["target_id"], set()).add(
+                    event["triggering_dependency"]
+                )
             elif etype == "recheck_confirmed":
                 receipt = Receipt.from_dict(event["receipt"])
                 audit = AuditVerdict.from_dict(event["audit"])
@@ -139,7 +150,7 @@ class Ratchet:
                     audit=audit,
                     accepted_at=event["at"],
                 )
-                self._marked_for_recheck.discard(event["target_id"])
+                self._marked_for_recheck.pop(event["target_id"], None)
             elif etype == "blocking_event":
                 self._blocking.append(BlockingEvent(
                     target_id=event["target_id"],
@@ -148,7 +159,7 @@ class Ratchet:
                     raised_at=event["at"],
                 ))
                 self._accepted.pop(event["target_id"], None)
-                self._marked_for_recheck.discard(event["target_id"])
+                self._marked_for_recheck.pop(event["target_id"], None)
             else:  # pragma: no cover - defensive; log is append-only by this module only
                 raise RatchetError(f"unknown ratchet event type {etype!r}")
 
@@ -215,7 +226,7 @@ class Ratchet:
             accepted_at=at,
         )
         self._accepted[receipt.target_id] = entry
-        self._marked_for_recheck.discard(receipt.target_id)
+        self._marked_for_recheck.pop(receipt.target_id, None)
         return entry
 
     def remove(self, target_id: str, reason: str) -> RemovalEvent:
@@ -247,7 +258,7 @@ class Ratchet:
                     "triggering_dependency": changed_dep,
                     "at": at,
                 })
-                self._marked_for_recheck.add(target_id)
+                self._marked_for_recheck.setdefault(target_id, set()).add(changed_dep)
                 marked.append(target_id)
         return marked
 
@@ -268,12 +279,59 @@ class Ratchet:
         must have been wrong, moving on" — it is a first-class, logged
         event a caller is expected to act on before letting anything
         downstream of `target_id` proceed.
+
+        This is a RE-verification path, never a second admission path.
+        Three things are therefore refused outright (RatchetError) rather
+        than being recorded either way:
+
+          * a target with no outstanding recheck mark — a target that was
+            never accepted, or never marked by `recheck_dependents`, has
+            no re-verification to record, and a first admission has to go
+            through `accept()`;
+          * a `changed_dep` this target was not marked for — the mark is
+            what says which dependency change is owed a re-check, so an
+            unrelated dependency cannot discharge it;
+          * a receipt/audit pair that is not about one artifact, or not
+            about `target_id` — the same validation `accept()` performs,
+            for the same reason: a receipt about candidate A and an audit
+            about candidate B are two statements about two things, and
+            reading them as one is exactly how an unaudited candidate
+            would enter the set.
+
+        A refusal changes nothing: the entry stays as it was and the
+        recheck mark stays outstanding, so the re-verification is still
+        owed.
         """
+        outstanding = self._marked_for_recheck.get(target_id)
+        if outstanding is None:
+            raise RatchetError(
+                f"target {target_id!r} is not marked for re-verification; "
+                f"record_recheck_result records the outcome of a mark made by "
+                f"recheck_dependents(), it is not a second way into the accepted set "
+                f"(use accept() with a receipt and an audit verdict)"
+            )
+        if changed_dep not in outstanding:
+            raise RatchetError(
+                f"target {target_id!r} is marked for re-verification after "
+                f"{sorted(outstanding)!r} changed, not {changed_dep!r}"
+            )
+
+        if receipt is not None and audit is not None:
+            if receipt.target_id != audit.target_id or receipt.candidate_id != audit.candidate_id:
+                raise RatchetError(
+                    "receipt and audit verdict do not refer to the same target/candidate: "
+                    f"receipt=({receipt.target_id!r}, {receipt.candidate_id!r}) "
+                    f"audit=({audit.target_id!r}, {audit.candidate_id!r})"
+                )
+            if receipt.target_id != target_id:
+                raise RatchetError(
+                    f"recheck artifacts are about target {receipt.target_id!r}, but the "
+                    f"target being re-verified is {target_id!r}"
+                )
+
         holds = (
             receipt is not None
             and audit is not None
-            and receipt.target_id == target_id
-            and audit.target_id == target_id
             and receipt.verdict == "accepted"
             and audit.verdict == "pass"
         )
@@ -295,7 +353,7 @@ class Ratchet:
                 audit=audit,
                 accepted_at=at,
             )
-            self._marked_for_recheck.discard(target_id)
+            self._marked_for_recheck.pop(target_id, None)
             return None
 
         reason = "recheck failed after dependency change: "
@@ -314,7 +372,7 @@ class Ratchet:
             "at": at,
         })
         self._accepted.pop(target_id, None)
-        self._marked_for_recheck.discard(target_id)
+        self._marked_for_recheck.pop(target_id, None)
         event = BlockingEvent(
             target_id=target_id, triggering_dependency=changed_dep, reason=reason, raised_at=at
         )
