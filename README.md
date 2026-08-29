@@ -99,7 +99,11 @@ one.
 Recorded as short ADRs, indexed at
 [`docs/decisions/README.md`](docs/decisions/README.md): the kernel gate
 as where trust is decided, receipt schema versioning, the monotone
-ratchet, and the abstain-vs-fail / vacuous-vs-not-exercised discipline.
+ratchet, the abstain-vs-fail / vacuous-vs-not-exercised discipline, and
+how a receipt store would project into a generated, higher-level
+acceptance manifest under the separate
+[acceptance-format](https://github.com/ivmat/acceptance-format)
+specification, should one ever be added here.
 
 ## 7. Glossary
 
