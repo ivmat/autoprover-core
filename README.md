@@ -28,7 +28,8 @@ full: these are kernel-checked theorems about models, mostly safety
 properties over finite structures, not verified implementations or
 liveness guarantees.
 
-Toolchains are pinned per package. License: Apache-2.0.
+Toolchains are pinned per package. License: Apache-2.0 (see
+[Author & license](#author--license)).
 
 ## 3. Building blocks
 
@@ -100,10 +101,22 @@ Recorded as short ADRs, indexed at
 [`docs/decisions/README.md`](docs/decisions/README.md): the kernel gate
 as where trust is decided, receipt schema versioning, the monotone
 ratchet, the abstain-vs-fail / vacuous-vs-not-exercised discipline, and
-how a receipt store would project into a generated, higher-level
-acceptance manifest under the separate
+[ADR-005](docs/decisions/ADR-005-manifest-is-generated-from-receipts.md),
+which rules how a receipt store would project into a generated,
+higher-level acceptance manifest under the separate
 [acceptance-format](https://github.com/ivmat/acceptance-format)
 specification, should one ever be added here.
+
+[`acceptance.toml`](acceptance.toml) is a separate, MINIMAL,
+hand-authored manifest under that same specification — four repo-level
+claims (corpus build, catalog consistency, reference test suite,
+catalog honesty-flag enforcement), each re-runnable and re-checkable
+against this checkout. It is explicitly NOT the ADR-005 flagship
+bundle: it makes no claim about what any Lean theorem proves and no
+claim traceable to a receipt, so ADR-005's generated-only rule does not
+govern it. A future generated manifest projecting this repo's receipts
+would be a different object at a different path; it would supersede
+nothing here.
 
 ## 7. Glossary
 
@@ -149,3 +162,8 @@ the docs, or the reference implementation. Suggested reading order:
 [`maintainers/`](maintainers/) — working material for repo maintainers
 and their agents; nothing in it is needed to use the corpus, the docs,
 or the reference implementation.
+
+## Author & license
+
+Ivo Matijasevic ([@ivmat](https://github.com/ivmat)). Licensed under
+[Apache-2.0](LICENSE).
