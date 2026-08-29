@@ -45,12 +45,14 @@
 id            = "acceptance/0"
 shape         = "single-file"
 spec_id       = "acceptance-format"
-spec_sha      = "bd1c995bd9ae7382d33e3db8c11acc5a99ac3ba4"       # acceptance-format @ bd1c995;
-                              # tools/ and spec/ are byte-identical between this commit and the
-                              # acceptance-format checkout actually used to validate this file
-                              # (`git diff bd1c995 -- tools/ spec/` is empty there), so bd1c995 is
-                              # also the validator sha actually exercised, named below.
-validator_sha = "bd1c995bd9ae7382d33e3db8c11acc5a99ac3ba4"
+spec_sha      = "c8c00bb08ce423e6b4f2403bf2f4f8029393b812"       # acceptance-format @ c8c00bb,
+                              # the public commit that syncs the spec state this manifest was
+                              # validated against; tools/ and spec/ under this commit are
+                              # byte-identical to the working checkout the validator was actually
+                              # run from (0 differing entries across both directories), so this is
+                              # a content-identical repin to a publicly resolvable commit, not a
+                              # re-validation against different content.
+validator_sha = "c8c00bb08ce423e6b4f2403bf2f4f8029393b812"
 generated_by  = "hand-authored"
 generated_at  = "2026-08-29T17:23:40Z"
 illustrative  = false        # this is a certificate for a real subject, not a teaching example —
