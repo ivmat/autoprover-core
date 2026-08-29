@@ -1,8 +1,11 @@
 /-
   AutoproverCorpus.Processes.TestingPreorder
 
-  The De Nicola-Hennessy testing preorder over a finite labelled transition system is a
-  preorder: reflexive and transitive, by test-set containment.
+  The De Nicola-Hennessy MAY-testing preorder is a preorder: reflexive and transitive, by
+  test-set containment. `passes : Proc → Test → Prop` is an arbitrary (uninterpreted) relation
+  here — no labelled transition system, observer composition, computations, or success states
+  are formalized; the result holds of ANY pass relation over ANY `Proc`/`Test` types, so it does
+  not by itself carry DNH's testing machinery.
 
   Attribution: Classical (De Nicola and Hennessy, 1984).
 

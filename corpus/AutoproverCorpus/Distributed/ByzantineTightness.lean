@@ -1,16 +1,24 @@
 /-
   AutoproverCorpus.Distributed.ByzantineTightness
 
-  Tightness of the Byzantine threshold: at n = 3f, disagreement is reachable - two quorums can
-  certify contradictory outcomes - so 3f+1 nodes are necessary, not just sufficient.
+  Tightness of the Byzantine threshold: at n = 3f, two size-2f quorums certify contradictory
+  outcomes - a static configuration exhibiting two uniform but contradictory certified views,
+  not a reachability result (no transition system is modeled here). This makes 3f+1 nodes
+  necessary, not just
+  sufficient, ONLY GIVEN the unformalized liveness premise that a usable quorum must be
+  attainable while up to f nodes are silent — i.e. quorum size ≤ n − f; the module itself
+  proves that the LARGER 2f+1-sized quorums remain safe at n = 3f.
 
   Attribution: Classical (Pease, Shostak and Lamport, 1980).
 
   SCOPE NOTE. The tightness half is a single concrete counterexample: f = 1 and n = 3, with the
-  node universe `[1, 2, 3]`, two size-2 quorums, and the shared node faulty. There is no
-  construction of a disagreeing instance for general f, so "3f+1 is necessary" is witnessed at
-  f = 1 only. Part (1) of the module (`still_correct_at_n_eq_3f_fixed_quorum`) IS general in f,
-  but it is the positive direction, not the tightness claim.
+  node universe `[1, 2, 3]`, two size-2 (not size-2f+1) quorums, and the shared node faulty.
+  There is no construction of a disagreeing instance for general f, so "3f+1 is necessary" is
+  witnessed at f = 1 only, and even that witness only bears on necessity under the liveness
+  premise above (quorum size ≤ n − f), which is neither formalized nor proved by this module.
+  Part (1) of the module (`still_correct_at_n_eq_3f_fixed_quorum`) IS general in f, but it is the
+  positive direction, not the tightness claim, and it proves that 2f+1-sized quorums stay SAFE
+  at n = 3f — so the size-2f witness does not by itself force 3f+1.
 
   Machine-checked in Lean 4 (core language, no external libraries).
   The claim made is exactly the theorem statements below, as accepted

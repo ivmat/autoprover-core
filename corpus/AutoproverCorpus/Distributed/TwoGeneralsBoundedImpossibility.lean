@@ -1,22 +1,28 @@
 /-
   AutoproverCorpus.Distributed.TwoGeneralsBoundedImpossibility
 
-  Two Generals impossibility, bounded form: no k-round deterministic protocol over a lossy
-  channel can jointly guarantee agreement, attack on a fully delivered run, and retreat on total
-  silence - all three clauses are required by the proof (agreement plus attack-on-full alone are
-  satisfiable by the constant protocol). Proved general in k by a locality/indistinguishability
-  induction.
+  Two Generals impossibility, bounded form: no CONTENT-BLIND, delivery-bit-only (ack-only)
+  k-round protocol over a lossy channel can jointly guarantee agreement, attack on a fully
+  delivered run, and retreat on total silence - all three clauses are required by the proof
+  (agreement plus attack-on-full alone are satisfiable by the constant protocol). Proved general
+  in k by a locality/indistinguishability induction.
 
   Attribution: Classical (Akkoyunlu, Ekanadham and Huber, 1969; Gray, 1978).
 
-  SCOPE NOTE (the schedule is fixed; the WLOG step is not formalized). `Protocol k` below fixes
-  the CANONICAL alternating message schedule: round `i` is sent A -> B when `i` is even and
-  B -> A when `i` is odd, and that parity is what the `localA`/`localB` fields encode — A may
-  read only odd-indexed deliveries, B only even-indexed ones. The impossibility is therefore
-  proved for every `k` and every protocol over THAT schedule. The textbook argument additionally
-  claims WLOG that an arbitrary `k`-message schedule reduces to the alternating one; that
-  reduction is NOT formalized here, so this module must not be cited as the impossibility over
-  an arbitrary message schedule.
+  SCOPE NOTE (the schedule is fixed; the protocol class is restricted; the WLOG step is not
+  formalized). `Protocol k` below fixes the CANONICAL alternating message schedule: round `i`
+  is sent A -> B when `i` is even and B -> A when `i` is odd. The `localA`/`localB` fields go
+  further than "decides from the transcript of messages actually delivered": they require each
+  party's decision to be a function of the per-round DELIVERY BITS addressed to it, invariant
+  under any change to the messages' CONTENT. A deterministic protocol whose decision reads the
+  content of a delivered message (e.g. an earlier delivery bit encoded into a later message) can
+  violate `localA`/`localB` and so falls outside this `Protocol` type. The impossibility proved
+  here is therefore for the strictly smaller class of content-blind, delivery-bit-only (ack-only)
+  protocols over that schedule, not for every deterministic protocol over it. The textbook
+  argument additionally claims WLOG that an arbitrary `k`-message schedule reduces to the
+  alternating one; that reduction is NOT formalized here either, so this module must not be
+  cited as the impossibility over an arbitrary message schedule or an arbitrary deterministic
+  protocol.
 
   Machine-checked in Lean 4 (core language, no external libraries).
   The claim made is exactly the theorem statements below, as accepted
@@ -36,11 +42,12 @@ def allTrue (k : Nat) : Adv k := fun _ => true
 /-- The all-messages-lost run (total silence). -/
 def allFalse (k : Nat) : Adv k := fun _ => false
 
-/-- A deterministic `k`-round two-generals protocol over the CANONICAL alternating
-    schedule (round `i` sent A→B if `i` even, B→A if `i` odd — see header): a pair of
-    decision functions, each depending ONLY on the delivery status of the messages
-    ADDRESSED TO that party (`localA`/`localB` — the formal content of "decides from the
-    transcript of messages actually delivered," made party-relative). -/
+/-- A `k`-round two-generals protocol over the CANONICAL alternating schedule (round `i`
+    sent A→B if `i` even, B→A if `i` odd — see header), restricted to the content-blind,
+    delivery-bit-only (ack-only) class: each decision function depends ONLY on the per-round
+    DELIVERY BITS of the messages ADDRESSED TO that party, not on their content (`localA`/
+    `localB` — a strictly smaller class than all deterministic protocols over the schedule;
+    see header). -/
 structure Protocol (k : Nat) where
   dA : Adv k → Bool
   dB : Adv k → Bool

@@ -1,9 +1,8 @@
 /-
   AutoproverCorpus.Security.MerkleInclusion
 
-  Merkle inclusion-proof soundness under an injective hash plus leaf/node domain separation -
-  injectivity alone is insufficient (a second-preimage counterexample is included). `hleaf`
-  and `hnode` model an idealized, abstractly injective hash; no cryptographic
+  Merkle inclusion-proof soundness under an injective hash plus leaf/node domain separation.
+  `hleaf` and `hnode` model an idealized, abstractly injective hash; no cryptographic
   collision-resistance claim is made about any concrete hash — injectivity and domain
   separation are explicit hypotheses, not proved.
 
