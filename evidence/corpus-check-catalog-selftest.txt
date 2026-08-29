@@ -1,0 +1,16 @@
+COMMAND: python3 corpus/check_catalog.py --selftest
+EXIT STATUS: 0
+
+--- OUTPUT ---
+CAUGHT (catalog rows == imports == module files): catalog row for `ConflictSerializability` deleted
+CAUGHT (catalog rows == imports == module files): import of `ConflictSerializability` deleted
+CAUGHT (catalog rows == imports == module files): a module file with no catalog row and no import
+CAUGHT (catalog rows == imports == module files): module file for `ConflictSerializability` deleted, row and import left behind
+CAUGHT (stated counts match the rows): `Concurrency` per-area footer count off by one
+CAUGHT (stated counts match the rows): Total `full` count off by seven
+CAUGHT (every scoped row states its restriction): a scoped row with its restriction removed
+CAUGHT (catalog rows == imports == module files): a duplicated empty `## Concurrency` heading
+CAUGHT (stated counts match the rows): a duplicate `Concurrency: N modules.` footer
+CAUGHT (stated counts match the rows): a duplicate area key in the Total breakdown
+
+check_catalog.py --selftest: all 10 planted violations were caught

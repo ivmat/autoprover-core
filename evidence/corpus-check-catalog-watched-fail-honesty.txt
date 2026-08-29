@@ -1,0 +1,30 @@
+PERTURBATION: applied the following unified diff to a scratch copy of corpus/
+(the tracked tree was never touched) — strips the stated restriction from the
+scoped TripleModularRedundancy row, leaving a bare 'scoped' cell with nothing
+said. Verified applyable with `git apply --check` before running.
+
+diff --git a/CATALOG.md b/CATALOG.md
+index 9cf6424..9a0ac74 100644
+--- a/CATALOG.md
++++ b/CATALOG.md
+@@ -119,7 +119,7 @@ Processes: 8 modules.
+ | KOutOfN | The k-out-of-n structure function is monotone; series and parallel are its two extreme special cases. | Classical reliability theory (Birnbaum, 1969; Barlow and Proschan, 1975). | full |
+ | PivotalDecomposition | Pivotal (Shannon) decomposition of monotone Boolean structure functions, with series and parallel bounds. | Classical (Birnbaum; Barlow and Proschan). | full |
+ | StructureFunctionDuality | The dual structure function is involutive, preserves coherence, swaps series and parallel, and carries minimal cut vectors to minimal path vectors. | Classical reliability theory (Barlow and Proschan, 1975). | full |
+-| TripleModularRedundancy | Perfect-voter TMR of three independent e-failing components fails with probability 3e^2 - 2e^3, improving on e for 0 < e < 1/2. | Classical reliability analysis (TMR with a perfect voter; cf. von Neumann, 1956, for the faulty-organ theorem, which this file does NOT prove). | scoped — perfect-voter analysis only; the faulty-organ (von Neumann) case is proved separately |
++| TripleModularRedundancy | Perfect-voter TMR of three independent e-failing components fails with probability 3e^2 - 2e^3, improving on e for 0 < e < 1/2. | Classical reliability analysis (TMR with a perfect voter; cf. von Neumann, 1956, for the faulty-organ theorem, which this file does NOT prove). | scoped |
+ | VonNeumannFaultyOrgan | Von Neumann multiplexing error analysis when the restoring organ itself is built from unreliable components. | Classical (von Neumann, 1956); scoped finite form. | scoped — an explicit error function with an organ-failure parameter; the full symbolic threshold is not claimed |
+ | VonNeumannFaultyOrgan2 | Error after a second restoring stage (a nine-gate organ) of the faulty-organ multiplexing analysis. | Classical (von Neumann, 1956); two-stage finite form. | scoped — one extra (two-stage) recursion level; not a general n-level recursive result |
+ 
+
+COMMAND: python3 corpus/check_catalog.py
+EXIT STATUS: 1
+
+--- OUTPUT ---
+
+check_catalog.py: 2 of 3 checks FAILED
+PASS: catalog rows == imports == module files
+FAIL: stated counts match the rows
+  - CATALOG.md:148: Total says 34 flagged `scoped`, the tables have 33
+FAIL: every scoped row states its restriction
+  - CATALOG.md:122: `TripleModularRedundancy` is flagged scoped with no restriction stated

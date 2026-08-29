@@ -1,0 +1,33 @@
+PERTURBATION: applied the following unified diff to a scratch copy of corpus/
+(the tracked tree was never touched); verified applyable with
+`git apply --check` before running.
+
+diff --git a/AutoproverCorpus/Security/MerkleInclusion.lean b/AutoproverCorpus/Security/MerkleInclusion.lean
+index d76004c..76f8799 100644
+--- a/AutoproverCorpus/Security/MerkleInclusion.lean
++++ b/AutoproverCorpus/Security/MerkleInclusion.lean
+@@ -211,3 +211,5 @@ theorem sample_invalid_proof_fails :
+     cases h3)
+ 
+ end AutoproverCorpus.MerkleInclusion
++
++theorem __watched_fail_probe__ : 1 = 2 := by rfl
+
+COMMAND: lake --dir corpus build
+EXIT STATUS: 1
+
+--- OUTPUT ---
+✖ [75/77] Building AutoproverCorpus.Security.MerkleInclusion (149ms)
+trace: .> [lake's own invocation-trace line elided here — it echoes the local machine's
+absolute toolchain and scratch-directory paths, which carry no information about the
+failure itself; the actual compiler diagnostic follows below, verbatim]
+error: AutoproverCorpus/Security/MerkleInclusion.lean:215:45: Tactic `rfl` failed: The left-hand side
+  1
+is not definitionally equal to the right-hand side
+  2
+
+⊢ 1 = 2
+error: Lean exited with code 1
+Some required targets logged failures:
+- AutoproverCorpus.Security.MerkleInclusion
+error: build failed

@@ -1,0 +1,5 @@
+COMMAND: lake --dir corpus build
+EXIT STATUS: 0
+
+--- OUTPUT ---
+Build completed successfully (77 jobs).

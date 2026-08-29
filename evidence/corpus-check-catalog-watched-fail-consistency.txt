@@ -1,0 +1,33 @@
+PERTURBATION: applied the following unified diff to a scratch copy of corpus/
+(the tracked tree was never touched) — deletes CATALOG.md's ConflictSerializability
+row only; the module file and its AutoproverCorpus.lean import were left in place.
+Verified applyable with `git apply --check` before running.
+
+diff --git a/CATALOG.md b/CATALOG.md
+index 9cf6424..a7702ed 100644
+--- a/CATALOG.md
++++ b/CATALOG.md
+@@ -24,7 +24,6 @@ implied by its name.
+ 
+ | Module | Proves | Attribution | Scope |
+ |---|---|---|---|
+-| ConflictSerializability | A schedule's precedence (conflict) graph is acyclic iff its transactions admit a topological rank — a `TxId → Nat` numbering that strictly increases along every precedence edge — with a cyclic schedule that admits none and an interleaved acyclic one that does. | Classical (Eswaran, Gray, Lorie and Traiger, 1976; Bernstein et al.). | scoped — fixed two-transaction, two-resource universe; and the equivalence proved is acyclicity iff a topological rank exists, not conflict-equivalence to a serial schedule (neither a serial schedule nor conflict-equivalence is defined here) |
+ | DekkerMutex | Dekker's algorithm guarantees mutual exclusion, via a finite inductive invariant checked by `decide`. | Dekker's algorithm, as published in E. W. Dijkstra, "Cooperating Sequential Processes" (1968), §2. | scoped — safety (mutual exclusion) only; liveness/no-deadlock not proved |
+ | PetersonMutex | Peterson's algorithm guarantees mutual exclusion, via a finite inductive invariant checked by `decide`. | G. L. Peterson, 1981. | scoped — safety (mutual exclusion) only; liveness/starvation-freedom not proved |
+ | ResourceOrderingAcyclic | Ordered resource acquisition (fixed global order) keeps the wait-for graph acyclic, excluding circular wait. | Classical (Havender, 1968; Coffman conditions, 1971). | scoped — safety only; the deadlock-freedom corollary is disclosed but not proved here |
+
+COMMAND: python3 corpus/check_catalog.py
+EXIT STATUS: 1
+
+--- OUTPUT ---
+
+check_catalog.py: 2 of 3 checks FAILED
+FAIL: catalog rows == imports == module files
+  - `ConflictSerializability` has a module file but no catalog row
+  - `ConflictSerializability` is imported by AutoproverCorpus.lean but has no catalog row
+FAIL: stated counts match the rows
+  - CATALOG.md:35: `Concurrency` footer says 8 modules, the table has 7
+  - CATALOG.md:147: Total says 74 modules, the catalog has 73 rows
+  - CATALOG.md:147: Total breakdown says Concurrency 8, the table has 7
+  - CATALOG.md:147: Total says 34 flagged `scoped`, the tables have 33
+PASS: every scoped row states its restriction

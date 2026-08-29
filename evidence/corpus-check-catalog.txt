@@ -1,0 +1,9 @@
+COMMAND: python3 corpus/check_catalog.py
+EXIT STATUS: 0
+
+--- OUTPUT ---
+PASS: catalog rows == imports == module files
+PASS: stated counts match the rows
+PASS: every scoped row states its restriction
+
+check_catalog.py: 3 checks passed; 74 catalog rows
