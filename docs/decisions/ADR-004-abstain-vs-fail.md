@@ -50,11 +50,14 @@ A caller can always distinguish "this held," "this couldn't fire,"
 receipt alone, without inferring intent from an absence. An audit check
 that abstains passes without judging, and says so in a field a caller can
 branch on. Every check writes its own block into the audit verdict's
-`details`, and every block carries `judged`: an abstention sets
-`judged: false` together with a `reason` naming what was missing — "no
-claimed_scope declared", "no enumerated-obligation evidence recorded",
-"claim_grade is 'probe', not 'contract'", "no kernel receipt supplied to
-judge obligation statuses". The `verdict` field alone still does not
+`details`, and every block carries `judged`. When they abstain, most
+checks pair `judged: false` with a `reason` naming what was missing —
+"no claimed_scope declared", "no enumerated-obligation evidence
+recorded", "claim_grade is 'probe', not 'contract'", "no kernel receipt
+supplied to judge obligation statuses" — but `check_name_content`
+instead signals its abstain through an empty `keywords_judged` list (no
+declared keyword carried a judgeable signal set) with no separate
+`reason` field. The `verdict` field alone still does not
 separate "abstained" from "passed", deliberately: both are `pass`, because
 an abstention is not a finding. A caller that wants the difference reads
 `details.<check>.judged`, and it is on the artifact rather than only in the
